@@ -39,6 +39,41 @@ await postEntry(db, {
 The three postings sum to zero (`985000 + 15000 - 1000000 = 0`); the fee is
 never silently netted out of the revenue figure.
 
+## Chart of accounts (providers and webhooks)
+
+`ensureChartOfAccounts(db, currency)` creates the following accounts for a
+currency, idempotently (an existing account is left untouched), one set of
+provider-scoped accounts per supported `ProviderId` (`stripe`, `paystack`,
+`fake`):
+
+| Code | Type | Purpose |
+| --- | --- | --- |
+| `cash:{provider}:{CUR}` | asset | Provider clearing: money a provider is holding for us before it settles to the bank. |
+| `fees:{provider}:{CUR}` | expense | Fees a provider took, whether per-transaction or on settlement. |
+| `bank:{CUR}` | asset | Our actual bank account, debited when a settlement lands. |
+| `revenue:{CUR}` | revenue | Earned revenue. |
+| `refunds:{CUR}` | expense | Contra-revenue: money returned to customers, kept as its own account rather than reversing `revenue`. |
+| `receivable:{CUR}` | asset | Amounts owed to us that have not yet been collected (reserved for invoicing in M3). |
+
+### Webhook ingestion postings
+
+- `payment.succeeded`: debit `cash:{provider}:{CUR}` for the gross amount,
+  credit `revenue:{CUR}`. If the event carries a fee, a second pair of
+  postings debits `fees:{provider}:{CUR}` and credits
+  `cash:{provider}:{CUR}` for the fee, so the provider's clearing account
+  nets to gross minus fee — what actually settles.
+- `refund.succeeded`: debit `refunds:{CUR}`, credit `cash:{provider}:{CUR}`.
+- `settlement.posted` / reconciliation: debit `bank:{CUR}` for the net
+  amount that hit the bank, debit `fees:{provider}:{CUR}` for a settlement
+  fee that was not already posted per-transaction, credit
+  `cash:{provider}:{CUR}` for the gross. Whether the settlement fee was
+  already posted per-payment is provider-specific — see
+  `src/jobs/reconcile.ts` for the documented rule per provider.
+
+Every posting above goes through `postEntry` with an idempotency key derived
+from the provider event id or settlement id, so replaying the same webhook
+or reconciliation run is a no-op.
+
 ## Operational note: the app's database role
 
 Every invariant above (zero-sum, currency match, append-only, minimum two

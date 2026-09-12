@@ -36,6 +36,13 @@
       "when": 1789192916116,
       "tag": "0004_entries_min_postings",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789195125353,
+      "tag": "0005_m2_providers_webhooks",
+      "breakpoints": true
     }
   ]
 }
