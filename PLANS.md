@@ -53,8 +53,8 @@ Design: `docs/superpowers/specs/2026-09-12-billing-kit-design.md`.
 
 ## M5 — Release 1.0 (done when: a stranger can deploy it in under an hour from the README)
 
-- [ ] `.env.example`, deploy guide for Vercel and Neon, cron configuration, provider webhook setup guides
-- [ ] `pnpm seed` demo data; screenshots and a short GIF in the README
-- [ ] Contribution guide, issue templates, semantic versioning, changelog
-- [ ] Security notes: webhook secrets, cron secret rotation, PII handling
+- [x] `.env.example`, deploy guide for Vercel and Neon, cron configuration, provider webhook setup guides
+- [x] `pnpm seed` demo data; screenshots in the README (GIF skipped — see `.superpowers/m5-report.md`)
+- [x] Contribution guide, issue templates, semantic versioning, changelog
+- [x] Security notes: webhook secrets, cron secret rotation, PII handling
 - [ ] Launch: publish the ledger article, post the repo, add billing-kit to abdulsamii.com as a case study
