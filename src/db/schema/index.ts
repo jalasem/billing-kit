@@ -19,3 +19,5 @@ export * from "./invoice-lines";
 export * from "./invoice-sequences";
 export * from "./dunning-attempts";
 export * from "./notifications";
+export * from "./magic-links";
+export * from "./sessions";

@@ -29,3 +29,15 @@ export async function resetM3Tables(db: DbOrTx): Promise<void> {
       cascade`,
   );
 }
+
+/** Truncates the M3 tables plus the M4 auth tables (magic links, sessions). */
+export async function resetM4Tables(db: DbOrTx): Promise<void> {
+  await db.execute(
+    sql`truncate table
+      audit_log, idempotency_keys, account_balances, postings, entries, accounts,
+      reconciliation_flags, webhook_events, settlements, refunds, payments, customers,
+      dunning_attempts, notifications, invoice_lines, invoices, invoice_sequences,
+      subscriptions, plans, products, magic_links, sessions
+      cascade`,
+  );
+}

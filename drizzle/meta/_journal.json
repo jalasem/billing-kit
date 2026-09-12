@@ -64,6 +64,13 @@
       "when": 1789206959982,
       "tag": "0008_m3_fix_round",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789208789453,
+      "tag": "0009_m4_auth",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,9 @@
-export type NotificationKind = "payment_failed" | "retry_scheduled" | "subscription_cancelled" | "payment_recovered";
+export type NotificationKind =
+  | "payment_failed"
+  | "retry_scheduled"
+  | "subscription_cancelled"
+  | "payment_recovered"
+  | "magic_link";
 
 export interface NotificationTemplate {
   subject: string;

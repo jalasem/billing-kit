@@ -45,11 +45,11 @@ Design: `docs/superpowers/specs/2026-09-12-billing-kit-design.md`.
 
 ## M4 — Portal and admin (done when: a customer can manage their plan and an operator can trace any kobo from a screen)
 
-- [ ] Auth boundary: session-based customer auth (email magic link) and an operator role
-- [ ] Portal: current plan, invoices with status, update payment method (provider-hosted), cancel and resume
-- [ ] Admin: customers, subscriptions, invoices; ledger explorer (accounts → entries → postings, balances); webhook log with replay button; reconciliation status
-- [ ] Playwright smoke suite for portal and admin
-- [ ] Accessibility pass (keyboard, labels, contrast) on both surfaces
+- [x] Auth boundary: session-based customer auth (email magic link) and an operator role
+- [x] Portal: current plan, invoices with status, update payment method (provider-hosted), cancel and resume
+- [x] Admin: customers, subscriptions, invoices; ledger explorer (accounts → entries → postings, balances); webhook log with replay button; reconciliation status
+- [x] Playwright smoke suite for portal and admin
+- [x] Accessibility pass (keyboard, labels, contrast) on both surfaces
 
 ## M5 — Release 1.0 (done when: a stranger can deploy it in under an hour from the README)
 

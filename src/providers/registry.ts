@@ -41,6 +41,24 @@ export function configuredProviders(): ProviderId[] {
 }
 
 /**
+ * Chooses the provider the portal's "Subscribe" action bills a brand new
+ * subscription against: the `fake` provider outside production (documented
+ * — there is no real payment step to complete locally or in CI), otherwise
+ * the first configured live provider. Throws if none is configured, which
+ * is a deployment misconfiguration the operator needs to fix.
+ */
+export function defaultProviderForNewSubscriptions(): PaymentProvider {
+  if (process.env.NODE_ENV !== "production") {
+    return createProvider("fake");
+  }
+  const [first] = configuredProviders();
+  if (!first) {
+    throw new Error("No payment provider is configured (STRIPE_SECRET_KEY/PAYSTACK_SECRET_KEY)");
+  }
+  return createProvider(first);
+}
+
+/**
  * Builds a `{ stripe?, paystack? }` map of live providers, skipping (and
  * logging) any that aren't configured, instead of the caller building both
  * unconditionally and crashing on the first missing env var. Shared by the

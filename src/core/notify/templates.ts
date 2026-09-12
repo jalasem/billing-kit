@@ -48,6 +48,17 @@ export function paymentRecoveredTemplate(payload: PaymentRecoveredPayload): Noti
   return { subject, text, html: `<p>${text}</p>` };
 }
 
+export interface MagicLinkPayload {
+  /** The full callback URL, including the raw token — the raw token lives only here, never in the database. */
+  url: string;
+}
+
+export function magicLinkTemplate(payload: MagicLinkPayload): NotificationTemplate {
+  const subject = "Your billing-kit sign-in link";
+  const text = `Click to sign in: ${payload.url}\n\nThis link expires in 15 minutes and can only be used once.`;
+  return { subject, text, html: `<p><a href="${payload.url}">Sign in to billing-kit</a></p>` };
+}
+
 /** Dispatches to the template matching `kind`; `payload` is trusted to match that kind's shape (callers control both). */
 export function renderTemplate(kind: NotificationKind, payload: Record<string, unknown>): NotificationTemplate {
   switch (kind) {
@@ -59,5 +70,7 @@ export function renderTemplate(kind: NotificationKind, payload: Record<string, u
       return subscriptionCancelledTemplate(payload as unknown as SubscriptionCancelledPayload);
     case "payment_recovered":
       return paymentRecoveredTemplate(payload as unknown as PaymentRecoveredPayload);
+    case "magic_link":
+      return magicLinkTemplate(payload as unknown as MagicLinkPayload);
   }
 }
