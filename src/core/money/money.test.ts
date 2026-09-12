@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { add, assertSameCurrency, negate, subtract, sum } from "./arithmetic";
+import { add, assertSameCurrency, negate, subtract, sum, toSafeNumber } from "./arithmetic";
 import { getCurrency, isKnownCurrency } from "./currencies";
 import { format } from "./format";
 import { moneySchema } from "./schema";
@@ -33,6 +33,15 @@ describe("bigint arithmetic", () => {
   it("asserts every currency in a list matches", () => {
     expect(() => assertSameCurrency(["NGN", "NGN", "NGN"])).not.toThrow();
     expect(() => assertSameCurrency(["NGN", "USD"])).toThrow(/currency mismatch/i);
+  });
+
+  it("converts a bigint to a number when it is safe", () => {
+    expect(toSafeNumber(100n)).toBe(100);
+    expect(toSafeNumber(BigInt(Number.MAX_SAFE_INTEGER))).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it("throws instead of silently losing precision beyond Number.MAX_SAFE_INTEGER", () => {
+    expect(() => toSafeNumber(BigInt(Number.MAX_SAFE_INTEGER) + 1n)).toThrow(/MAX_SAFE_INTEGER/);
   });
 });
 

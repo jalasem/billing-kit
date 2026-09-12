@@ -1,9 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { toSafeNumber } from "@/core/money/arithmetic";
 import type { Money, NormalisedEvent, PaymentProvider } from "../types";
 import { PaystackClient } from "./client";
 import { mapPaystackEvent } from "./mapping";
 
 const SIGNATURE_HEADER = "x-paystack-signature";
+const FALLBACK_CURRENCY = "NGN";
 
 interface PaystackSettlementSummary {
   id: number;
@@ -11,6 +13,8 @@ interface PaystackSettlementSummary {
   settlement_date: string;
   total_amount: number;
   total_fees: number;
+  /** Not documented on every Paystack settlement response; see the report's guessed-shapes list. */
+  currency?: string;
 }
 
 interface PaystackSettlementTransaction {
@@ -63,7 +67,7 @@ export class PaystackProvider implements PaymentProvider {
       "/transaction/initialize",
       {
         email: input.email,
-        amount: Number(input.money.amount),
+        amount: toSafeNumber(input.money.amount),
         currency: input.money.currency.toUpperCase(),
         reference: input.reference,
         callback_url: input.successUrl,
@@ -104,7 +108,7 @@ export class PaystackProvider implements PaymentProvider {
     const response = await this.client.post<{ reference: string; status: string }>("/transaction/charge_authorization", {
       authorization_code: input.authorization,
       email: input.providerCustomerId,
-      amount: Number(input.money.amount),
+      amount: toSafeNumber(input.money.amount),
       currency: input.money.currency.toUpperCase(),
       reference: input.reference,
     });
@@ -146,17 +150,34 @@ export class PaystackProvider implements PaymentProvider {
       const transactions = await this.client.get<PaystackSettlementTransaction[]>(
         `/settlement/${settlement.id}/transactions`,
       );
+      const currency = this.settlementCurrency(settlement);
 
       settlements.push({
         settlementId: String(settlement.id),
         // Net of the per-transaction fees already posted at charge.success time.
-        money: { amount: BigInt(settlement.total_amount), currency: "NGN" },
-        fee: { amount: BigInt(settlement.total_fees), currency: "NGN" },
+        money: { amount: BigInt(settlement.total_amount), currency },
+        fee: { amount: BigInt(settlement.total_fees), currency },
         settledAt: new Date(settlement.settlement_date),
         paymentRefs: transactions.data.map((transaction) => transaction.reference),
       });
     }
 
     return settlements;
+  }
+
+  /**
+   * Reads the settlement's own currency when the response includes one,
+   * falling back to NGN only when it's absent (Paystack's `/settlement`
+   * response shape isn't officially documented field-by-field — see the
+   * report's guessed-shapes list) — and logging when that fallback fires,
+   * since a silent wrong-currency default would be a real bug in any
+   * non-NGN deployment.
+   */
+  private settlementCurrency(settlement: PaystackSettlementSummary): string {
+    if (settlement.currency) {
+      return settlement.currency.toUpperCase();
+    }
+    console.warn(`[paystack] settlement ${settlement.id} has no currency field; defaulting to ${FALLBACK_CURRENCY}`);
+    return FALLBACK_CURRENCY;
   }
 }

@@ -1,6 +1,23 @@
+import { z } from "zod";
+import { moneySchema } from "@/core/money/schema";
+import { ProviderPayloadError } from "../errors";
 import type { Money, NormalisedEvent } from "../types";
 
 type SubscriptionStatus = Extract<NormalisedEvent, { type: "subscription.updated" }>["status"];
+
+/** Paystack ids are sometimes numeric (e.g. `data.id`), sometimes strings (e.g. `data.reference`). */
+const paystackRefSchema = z.union([z.string().min(1), z.number()]).transform(String);
+
+function parseMoney(amount: unknown, currency: unknown): Money {
+  return moneySchema.parse({ amount, currency });
+}
+
+function parseOptionalMoney(amount: unknown, currency: unknown): Money | undefined {
+  if (amount === undefined || amount === null) {
+    return undefined;
+  }
+  return parseMoney(amount, currency);
+}
 
 interface PaystackCustomer {
   customer_code?: string;
@@ -79,23 +96,32 @@ function subscriptionStatusFor(eventName: string, data: PaystackSubscriptionData
 /**
  * Maps one already-parsed Paystack webhook envelope (`{ event, data }`) to
  * our normalised vocabulary, or `undefined` for an event type we don't
- * handle.
+ * handle. Any field this reads that turns out missing or the wrong shape
+ * (amount, currency, ids, fees, timestamps) surfaces as a
+ * `ProviderPayloadError`, not a raw `TypeError`.
  */
 export function mapPaystackEvent(envelope: { event: string; data: unknown }): NormalisedEvent | undefined {
+  try {
+    return mapPaystackEventUnsafe(envelope);
+  } catch (error) {
+    throw new ProviderPayloadError("paystack", envelope.event, error);
+  }
+}
+
+function mapPaystackEventUnsafe(envelope: { event: string; data: unknown }): NormalisedEvent | undefined {
   const occurredAtFallback = new Date();
 
   switch (envelope.event) {
     case "charge.success": {
       const data = envelope.data as PaystackChargeSuccessData;
-      const currency = data.currency.toUpperCase();
-      const fee: Money | undefined =
-        typeof data.fees === "number" ? { amount: BigInt(data.fees), currency } : undefined;
+      const money = parseMoney(data.amount, data.currency);
+      const fee = parseOptionalMoney(data.fees, data.currency);
       return {
         type: "payment.succeeded",
         providerEventId: syntheticEventId(envelope.event, data.reference),
-        providerRef: data.reference,
+        providerRef: paystackRefSchema.parse(data.reference),
         customerRef: data.customer?.customer_code,
-        money: { amount: BigInt(data.amount), currency },
+        money,
         fee,
         occurredAt: data.paid_at ? new Date(data.paid_at) : (data.created_at ? new Date(data.created_at) : occurredAtFallback),
         raw: envelope,
@@ -104,14 +130,14 @@ export function mapPaystackEvent(envelope: { event: string; data: unknown }): No
 
     case "invoice.payment_failed": {
       const data = envelope.data as PaystackInvoicePaymentFailedData;
-      const providerRef = data.transaction?.reference ?? String(data.id);
-      const currency = (data.transaction?.currency ?? "NGN").toUpperCase();
+      const providerRef = paystackRefSchema.parse(data.transaction?.reference ?? data.id);
+      const money = parseMoney(data.amount, data.transaction?.currency ?? "NGN");
       return {
         type: "payment.failed",
         providerEventId: syntheticEventId(envelope.event, providerRef),
         providerRef,
         customerRef: data.customer?.customer_code,
-        money: { amount: BigInt(data.amount), currency },
+        money,
         reason: data.description ?? undefined,
         occurredAt: data.created_at ? new Date(data.created_at) : occurredAtFallback,
         raw: envelope,
@@ -120,13 +146,13 @@ export function mapPaystackEvent(envelope: { event: string; data: unknown }): No
 
     case "refund.processed": {
       const data = envelope.data as PaystackRefundProcessedData;
-      const currency = data.currency.toUpperCase();
+      const money = parseMoney(data.amount, data.currency);
       return {
         type: "refund.succeeded",
         providerEventId: syntheticEventId(envelope.event, data.id),
-        providerRef: String(data.id),
-        paymentRef: data.transaction.reference,
-        money: { amount: BigInt(data.amount), currency },
+        providerRef: paystackRefSchema.parse(data.id),
+        paymentRef: paystackRefSchema.parse(data.transaction.reference),
+        money,
         occurredAt: data.refunded_at
           ? new Date(data.refunded_at)
           : (data.created_at ? new Date(data.created_at) : occurredAtFallback),
@@ -139,7 +165,9 @@ export function mapPaystackEvent(envelope: { event: string; data: unknown }): No
     case "subscription.not_renew":
     case "invoice.update": {
       const data = envelope.data as PaystackSubscriptionData;
-      const providerSubscriptionId = data.subscription_code ?? data.subscription?.subscription_code ?? "unknown";
+      const providerSubscriptionId = paystackRefSchema.parse(
+        data.subscription_code ?? data.subscription?.subscription_code ?? "unknown",
+      );
       return {
         type: "subscription.updated",
         providerEventId: syntheticEventId(envelope.event, providerSubscriptionId),
@@ -153,17 +181,17 @@ export function mapPaystackEvent(envelope: { event: string; data: unknown }): No
 
     case "transfer.success": {
       const data = envelope.data as PaystackTransferSuccessData;
-      const currency = data.currency.toUpperCase();
-      const settlementId = data.transfer_code;
+      const money = parseMoney(data.amount, data.currency);
+      const settlementId = paystackRefSchema.parse(data.transfer_code);
       return {
         type: "settlement.posted",
         providerEventId: syntheticEventId(envelope.event, settlementId),
         settlementId,
-        money: { amount: BigInt(data.amount), currency },
+        money,
         // Paystack deducts its transaction fee from each charge as it
         // happens (already posted via charge.success); there is no
         // additional fee to post when the batch settles to the bank.
-        fee: { amount: 0n, currency },
+        fee: { amount: 0n, currency: money.currency },
         occurredAt: data.transferred_at
           ? new Date(data.transferred_at)
           : (data.created_at ? new Date(data.created_at) : occurredAtFallback),

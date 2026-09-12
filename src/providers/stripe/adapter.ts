@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { toSafeNumber } from "@/core/money/arithmetic";
 import type { Money, NormalisedEvent, PaymentProvider } from "../types";
 import { createStripeClient } from "./client";
 import { mapStripeEvent } from "./mapping";
@@ -74,7 +75,7 @@ export class StripeProvider implements PaymentProvider {
           quantity: 1,
           price_data: {
             currency: input.money.currency.toLowerCase(),
-            unit_amount: Number(input.money.amount),
+            unit_amount: toSafeNumber(input.money.amount),
             product_data: { name: input.description },
           },
         },
@@ -97,7 +98,7 @@ export class StripeProvider implements PaymentProvider {
       : (
           await this.client.prices.create({
             currency: input.plan.money.currency.toLowerCase(),
-            unit_amount: Number(input.plan.money.amount),
+            unit_amount: toSafeNumber(input.plan.money.amount),
             recurring: { interval: input.plan.interval },
             product_data: { name: input.reference },
           })
@@ -129,7 +130,7 @@ export class StripeProvider implements PaymentProvider {
     const intent = await this.client.paymentIntents.create({
       customer: input.providerCustomerId,
       payment_method: input.authorization,
-      amount: Number(input.money.amount),
+      amount: toSafeNumber(input.money.amount),
       currency: input.money.currency.toLowerCase(),
       confirm: true,
       off_session: true,

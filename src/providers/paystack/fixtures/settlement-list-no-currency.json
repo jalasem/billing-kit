@@ -1,9 +1,8 @@
 [
   {
-    "id": 555001,
+    "id": 555002,
     "domain": "test",
     "status": "success",
-    "currency": "NGN",
     "settlement_date": "2026-01-06",
     "total_amount": 985000,
     "total_fees": 15000

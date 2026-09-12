@@ -1,5 +1,11 @@
 import type Stripe from "stripe";
+import { z } from "zod";
+import { moneySchema } from "@/core/money/schema";
+import { ProviderPayloadError } from "../errors";
 import type { Money, NormalisedEvent } from "../types";
+
+const stripeIdSchema = z.string().min(1, "expected a non-empty Stripe id");
+const stripeTimestampSchema = z.number().finite();
 
 /** Reads an expandable Stripe reference: a bare id string, or the expanded object. */
 function expandedOrUndefined<T extends { id: string }>(value: string | T | null | undefined): T | undefined {
@@ -9,6 +15,17 @@ function expandedOrUndefined<T extends { id: string }>(value: string | T | null 
 function idOf<T extends { id: string }>(value: string | T | null | undefined): string | undefined {
   if (!value) return undefined;
   return typeof value === "string" ? value : value.id;
+}
+
+function parseMoney(amount: unknown, currency: unknown): Money {
+  return moneySchema.parse({ amount, currency });
+}
+
+function parseOptionalMoney(amount: unknown, currency: unknown): Money | undefined {
+  if (amount === undefined || amount === null) {
+    return undefined;
+  }
+  return parseMoney(amount, currency);
 }
 
 /**
@@ -28,7 +45,7 @@ function feeFromExpandedPaymentIntent(
   if (!balanceTransaction) {
     return undefined;
   }
-  return { amount: BigInt(balanceTransaction.fee), currency: balanceTransaction.currency.toUpperCase() };
+  return parseOptionalMoney(balanceTransaction.fee, balanceTransaction.currency);
 }
 
 /**
@@ -40,6 +57,35 @@ function feeFromExpandedPaymentIntent(
 function paymentIntentFromInvoice(invoice: Stripe.Invoice): string | Stripe.PaymentIntent | undefined {
   const firstPayment = invoice.payments?.data[0]?.payment;
   return firstPayment?.type === "payment_intent" ? firstPayment.payment_intent : undefined;
+}
+
+/**
+ * Picks the refund `charge.refunded` is actually reporting. Stripe's
+ * `refunds` list is not documented to be in any particular order and can
+ * contain every refund ever applied to the charge, not just this event's:
+ * prefer the refund `previous_attributes.refunds` didn't have yet (the one
+ * this event added), falling back to the most recently created refund when
+ * there is nothing to diff against. In practice `previous_attributes` is
+ * only populated on `*.updated` events per Stripe's docs, so — despite the
+ * defensive check — `charge.refunded` almost always falls through to the
+ * `created`-desc sort; see the report's guessed-shapes list.
+ */
+function mostRecentRefund(charge: Stripe.Charge, previousAttributes: unknown): Stripe.Refund | undefined {
+  const refunds = charge.refunds?.data ?? [];
+  if (refunds.length === 0) {
+    return undefined;
+  }
+
+  const previousRefunds = (previousAttributes as { refunds?: { data?: Stripe.Refund[] } } | undefined)?.refunds?.data;
+  if (previousRefunds) {
+    const previousIds = new Set(previousRefunds.map((refund) => refund.id));
+    const newlyAdded = refunds.filter((refund) => !previousIds.has(refund.id));
+    if (newlyAdded.length > 0) {
+      return newlyAdded.reduce((latest, refund) => (refund.created > latest.created ? refund : latest));
+    }
+  }
+
+  return [...refunds].sort((a, b) => b.created - a.created)[0];
 }
 
 type SubscriptionStatus = Extract<NormalisedEvent, { type: "subscription.updated" }>["status"];
@@ -55,20 +101,39 @@ const SUBSCRIPTION_STATUS: Record<Stripe.Subscription.Status, SubscriptionStatus
   incomplete_expired: "cancelled",
 };
 
+function subscriptionStatusFor(rawStatus: string): SubscriptionStatus {
+  const mapped = SUBSCRIPTION_STATUS[rawStatus as Stripe.Subscription.Status];
+  if (!mapped) {
+    throw new Error(`Unrecognized Stripe subscription status: "${rawStatus}"`);
+  }
+  return mapped;
+}
+
 /** Maps one Stripe event to our normalised vocabulary, or `undefined` for a type we don't handle. */
 export function mapStripeEvent(event: Stripe.Event): NormalisedEvent | undefined {
+  try {
+    return mapStripeEventUnsafe(event);
+  } catch (error) {
+    throw new ProviderPayloadError("stripe", event.type, error);
+  }
+}
+
+function mapStripeEventUnsafe(event: Stripe.Event): NormalisedEvent | undefined {
+  const providerEventId = stripeIdSchema.parse(event.id);
+  const occurredAt = new Date(stripeTimestampSchema.parse(event.created) * 1000);
+
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      const providerRef = idOf(session.payment_intent) ?? session.id;
+      const providerRef = stripeIdSchema.parse(idOf(session.payment_intent) ?? session.id);
       return {
         type: "payment.succeeded",
-        providerEventId: event.id,
+        providerEventId,
         providerRef,
         customerRef: idOf(session.customer) ?? undefined,
-        money: { amount: BigInt(session.amount_total ?? 0), currency: (session.currency ?? "usd").toUpperCase() },
+        money: parseMoney(session.amount_total, session.currency),
         fee: feeFromExpandedPaymentIntent(session.payment_intent),
-        occurredAt: new Date(event.created * 1000),
+        occurredAt,
         raw: event,
       };
     }
@@ -76,47 +141,47 @@ export function mapStripeEvent(event: Stripe.Event): NormalisedEvent | undefined
     case "invoice.paid": {
       const invoice = event.data.object as Stripe.Invoice;
       const paymentIntent = paymentIntentFromInvoice(invoice);
-      const providerRef = idOf(paymentIntent) ?? invoice.id!;
+      const providerRef = stripeIdSchema.parse(idOf(paymentIntent) ?? invoice.id);
       return {
         type: "payment.succeeded",
-        providerEventId: event.id,
+        providerEventId,
         providerRef,
         customerRef: idOf(invoice.customer) ?? undefined,
-        money: { amount: BigInt(invoice.amount_paid), currency: invoice.currency.toUpperCase() },
+        money: parseMoney(invoice.amount_paid, invoice.currency),
         fee: feeFromExpandedPaymentIntent(paymentIntent),
-        occurredAt: new Date(event.created * 1000),
+        occurredAt,
         raw: event,
       };
     }
 
     case "invoice.payment_failed": {
       const invoice = event.data.object as Stripe.Invoice;
-      const providerRef = idOf(paymentIntentFromInvoice(invoice)) ?? invoice.id!;
+      const providerRef = stripeIdSchema.parse(idOf(paymentIntentFromInvoice(invoice)) ?? invoice.id);
       return {
         type: "payment.failed",
-        providerEventId: event.id,
+        providerEventId,
         providerRef,
         customerRef: idOf(invoice.customer) ?? undefined,
-        money: { amount: BigInt(invoice.amount_due), currency: invoice.currency.toUpperCase() },
+        money: parseMoney(invoice.amount_due, invoice.currency),
         reason: invoice.last_finalization_error?.message ?? undefined,
-        occurredAt: new Date(event.created * 1000),
+        occurredAt,
         raw: event,
       };
     }
 
     case "charge.refunded": {
       const charge = event.data.object as Stripe.Charge;
-      const refund = charge.refunds?.data[0];
+      const refund = mostRecentRefund(charge, event.data.previous_attributes);
       if (!refund) {
         return undefined;
       }
       return {
         type: "refund.succeeded",
-        providerEventId: event.id,
-        providerRef: refund.id,
-        paymentRef: idOf(charge.payment_intent) ?? charge.id,
-        money: { amount: BigInt(refund.amount), currency: refund.currency.toUpperCase() },
-        occurredAt: new Date(event.created * 1000),
+        providerEventId,
+        providerRef: stripeIdSchema.parse(refund.id),
+        paymentRef: stripeIdSchema.parse(idOf(charge.payment_intent) ?? charge.id),
+        money: parseMoney(refund.amount, refund.currency),
+        occurredAt,
         raw: event,
       };
     }
@@ -126,26 +191,27 @@ export function mapStripeEvent(event: Stripe.Event): NormalisedEvent | undefined
       const subscription = event.data.object as Stripe.Subscription;
       return {
         type: "subscription.updated",
-        providerEventId: event.id,
-        providerSubscriptionId: subscription.id,
+        providerEventId,
+        providerSubscriptionId: stripeIdSchema.parse(subscription.id),
         customerRef: idOf(subscription.customer) ?? undefined,
-        status: SUBSCRIPTION_STATUS[subscription.status],
-        occurredAt: new Date(event.created * 1000),
+        status: subscriptionStatusFor(subscription.status),
+        occurredAt,
         raw: event,
       };
     }
 
     case "payout.paid": {
       const payout = event.data.object as Stripe.Payout;
+      const money = parseMoney(payout.amount, payout.currency);
       return {
         type: "settlement.posted",
-        providerEventId: event.id,
-        settlementId: payout.id,
-        money: { amount: BigInt(payout.amount), currency: payout.currency.toUpperCase() },
+        providerEventId,
+        settlementId: stripeIdSchema.parse(payout.id),
+        money,
         // Stripe absorbs the payout transfer cost; there is no separate fee
         // to post here (see src/jobs/reconcile.ts for the per-provider rule).
-        fee: { amount: 0n, currency: payout.currency.toUpperCase() },
-        occurredAt: new Date(event.created * 1000),
+        fee: { amount: 0n, currency: money.currency },
+        occurredAt,
         raw: event,
       };
     }

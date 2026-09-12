@@ -1,0 +1,61 @@
+{
+  "id": "evt_1PQRstChargeRefundedTwice",
+  "object": "event",
+  "api_version": "2025-08-27.basil",
+  "created": 1736035300,
+  "type": "charge.refunded",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": { "id": null, "idempotency_key": null },
+  "data": {
+    "object": {
+      "id": "ch_3PQRstPartial",
+      "object": "charge",
+      "payment_intent": "pi_3PQRstPartial",
+      "customer": "cus_NffrFeUfNV2Hib",
+      "amount": 500000,
+      "amount_refunded": 300000,
+      "currency": "usd",
+      "refunded": false,
+      "created": 1736035200,
+      "refunds": {
+        "object": "list",
+        "data": [
+          {
+            "id": "re_3PQRstRefundSecond",
+            "object": "refund",
+            "amount": 200000,
+            "currency": "usd",
+            "status": "succeeded",
+            "created": 1736035290
+          },
+          {
+            "id": "re_3PQRstRefundFirst",
+            "object": "refund",
+            "amount": 100000,
+            "currency": "usd",
+            "status": "succeeded",
+            "created": 1736035250
+          }
+        ]
+      }
+    },
+    "previous_attributes": {
+      "amount_refunded": 100000,
+      "refunded": false,
+      "refunds": {
+        "object": "list",
+        "data": [
+          {
+            "id": "re_3PQRstRefundFirst",
+            "object": "refund",
+            "amount": 100000,
+            "currency": "usd",
+            "status": "succeeded",
+            "created": 1736035250
+          }
+        ]
+      }
+    }
+  }
+}

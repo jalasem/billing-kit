@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { ProviderPayloadError } from "../errors";
 import { PaystackProvider } from "./adapter";
 import { PaystackClient } from "./client";
 
@@ -80,6 +81,13 @@ describe("PaystackProvider.parseEvents mapping", () => {
     const [second] = provider().parseEvents(fixture("charge-success.json"));
     expect(first.providerEventId).toBe(second.providerEventId);
   });
+
+  it("throws ProviderPayloadError, not a TypeError, for a payload missing a required amount", () => {
+    const broken = JSON.parse(fixture("charge-success.json"));
+    delete broken.data.amount;
+
+    expect(() => provider().parseEvents(JSON.stringify(broken))).toThrow(ProviderPayloadError);
+  });
 });
 
 describe("PaystackProvider.listSettlements", () => {
@@ -108,6 +116,28 @@ describe("PaystackProvider.listSettlements", () => {
       },
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to NGN and warns when the settlement response has no currency field", async () => {
+    const settlementList = fixture("settlement-list-no-currency.json");
+    const settlementTransactions = fixture("settlement-transactions.json");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const fetchImpl = vi.fn(async (url: string) => {
+      const body = url.includes("/transactions") ? settlementTransactions : settlementList;
+      return new Response(JSON.stringify({ status: true, message: "ok", data: JSON.parse(body) }));
+    });
+
+    const client = new PaystackClient("sk_test_stub", { fetchImpl });
+    const settlements = await provider(client).listSettlements({
+      from: new Date("2026-01-01T00:00:00Z"),
+      to: new Date("2026-01-10T00:00:00Z"),
+    });
+
+    expect(settlements[0]).toMatchObject({ money: { currency: "NGN" }, fee: { currency: "NGN" } });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("no currency field"));
+
+    warn.mockRestore();
   });
 });
 

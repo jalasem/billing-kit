@@ -40,13 +40,14 @@ export async function handleRefundSucceeded(
     .insert(refunds)
     .values({
       paymentId: payment.id,
+      provider,
       providerRef: event.providerRef,
       amount: event.money.amount,
       currency,
       entryId: entry.id,
       occurredAt: event.occurredAt,
     })
-    .onConflictDoNothing()
+    .onConflictDoNothing({ target: [refunds.provider, refunds.providerRef] })
     .returning();
 
   if (!inserted) {

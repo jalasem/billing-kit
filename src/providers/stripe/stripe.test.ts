@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type Stripe from "stripe";
 import { describe, expect, it } from "vitest";
+import { ProviderPayloadError } from "../errors";
 import type { StripeSettlementsClient } from "./adapter";
 import { StripeProvider } from "./adapter";
 
@@ -87,6 +88,23 @@ describe("StripeProvider.parseEvents mapping", () => {
 
   it("returns no events for a type it does not map", () => {
     expect(provider().parseEvents(fixture("customer-created-unhandled.json"))).toEqual([]);
+  });
+
+  it("picks the refund newly added by this event, not the first one in the list, when a charge has more than one refund", () => {
+    const [event] = provider().parseEvents(fixture("charge-refunded-multiple.json"));
+    expect(event).toMatchObject({
+      type: "refund.succeeded",
+      providerRef: "re_3PQRstRefundSecond",
+      paymentRef: "pi_3PQRstPartial",
+      money: { amount: 200000n, currency: "USD" },
+    });
+  });
+
+  it("throws ProviderPayloadError, not a TypeError, for a payload missing a required amount", () => {
+    const broken = JSON.parse(fixture("checkout-session-completed.json"));
+    broken.data.object.amount_total = null;
+
+    expect(() => provider().parseEvents(JSON.stringify(broken))).toThrow(ProviderPayloadError);
   });
 });
 

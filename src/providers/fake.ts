@@ -1,32 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { deserialiseNormalisedEvent, serialiseNormalisedEvent } from "@/core/webhooks/serialize";
 import type { Money, NormalisedEvent, PaymentProvider } from "./types";
 
 const SIGNATURE_HEADER = "x-fake-signature";
-
-/** JSON can't carry bigint or Date; this round-trips both through the fake's wire format. */
-function serialiseEvents(events: NormalisedEvent[]): string {
-  return JSON.stringify(events, (_key, value) => {
-    if (typeof value === "bigint") {
-      return { __type: "bigint", value: value.toString() };
-    }
-    return value;
-  });
-}
-
-function deserialiseEvents(rawBody: string): NormalisedEvent[] {
-  const parsed = JSON.parse(rawBody, (_key, value) => {
-    if (value && typeof value === "object" && value.__type === "bigint") {
-      return BigInt(value.value);
-    }
-    return value;
-  }) as unknown[];
-
-  return parsed.map((event) => reviveDates(event as Record<string, unknown>)) as NormalisedEvent[];
-}
-
-function reviveDates(event: Record<string, unknown>): Record<string, unknown> {
-  return { ...event, occurredAt: new Date(event.occurredAt as string) };
-}
 
 /**
  * In-memory provider used by contract tests and route/job tests that need a
@@ -108,7 +84,8 @@ export class FakeProvider implements PaymentProvider {
   }
 
   parseEvents(rawBody: string): NormalisedEvent[] {
-    return deserialiseEvents(rawBody);
+    const parsed = JSON.parse(rawBody) as unknown[];
+    return parsed.map((event) => deserialiseNormalisedEvent(event));
   }
 
   async listSettlements(range: {
@@ -131,7 +108,8 @@ export class FakeProvider implements PaymentProvider {
 
   /** Builds a raw body + signature header pair for one or more events, as if a provider sent them. */
   signedWebhook(events: NormalisedEvent | NormalisedEvent[]): { rawBody: string; headers: Headers } {
-    const rawBody = serialiseEvents(Array.isArray(events) ? events : [events]);
+    const list = Array.isArray(events) ? events : [events];
+    const rawBody = JSON.stringify(list.map((event) => serialiseNormalisedEvent(event)));
     const headers = new Headers({ [SIGNATURE_HEADER]: this.sign(rawBody) });
     return { rawBody, headers };
   }
