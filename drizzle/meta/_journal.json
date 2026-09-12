@@ -57,6 +57,13 @@
       "when": 1789201466672,
       "tag": "0007_m3_subscriptions_invoices_dunning",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789206959982,
+      "tag": "0008_m3_fix_round",
+      "breakpoints": true
     }
   ]
 }

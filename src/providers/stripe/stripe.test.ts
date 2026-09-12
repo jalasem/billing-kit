@@ -30,23 +30,29 @@ describe("StripeProvider.parseEvents mapping", () => {
     expect(event.occurredAt).toBeInstanceOf(Date);
   });
 
-  it("maps invoice.paid to payment.succeeded", () => {
+  it("maps invoice.paid to payment.succeeded, including the subscription id and service period for provider-mode invoice linkage", () => {
     const [event] = provider().parseEvents(fixture("invoice-paid.json"));
     expect(event).toMatchObject({
       type: "payment.succeeded",
       providerRef: "pi_3PQRstInvoice001",
       money: { amount: 200000n, currency: "USD" },
       fee: { amount: 6100n, currency: "USD" },
+      providerSubscriptionId: "sub_1PQRstSub001",
     });
+    if (event.type === "payment.succeeded") {
+      expect(event.periodStart?.toISOString()).toBe("2025-01-01T00:00:00.000Z");
+      expect(event.periodEnd?.toISOString()).toBe("2025-02-01T00:00:00.000Z");
+    }
   });
 
-  it("maps invoice.payment_failed to payment.failed, falling back to the invoice id with no successful payment intent", () => {
+  it("maps invoice.payment_failed to payment.failed, falling back to the invoice id with no successful payment intent, including the subscription id", () => {
     const [event] = provider().parseEvents(fixture("invoice-payment-failed.json"));
     expect(event).toMatchObject({
       type: "payment.failed",
       providerRef: "in_1PQRstInv002",
       money: { amount: 200000n, currency: "USD" },
       reason: "Your card was declined.",
+      providerSubscriptionId: "sub_1PQRstSub001",
     });
   });
 

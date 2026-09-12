@@ -77,11 +77,17 @@ export async function attemptInvoicePayment(
       return { attempted: true, succeeded: false, providerRef: result.providerRef, error: `charge ${result.status}`, invoice: current };
     }
 
-    const paid = await markInvoicePaid(db, current, {
+    const { invoice: paid, outcome } = await markInvoicePaid(db, current, {
       provider: provider.id,
       providerRef: result.providerRef,
+      // Exact by construction: the charge above was for `current.total`/`current.currency`.
+      amount: current.total,
+      currency: current.currency,
       occurredAt: new Date(),
     });
+    if (outcome !== "paid") {
+      return { attempted: true, succeeded: false, providerRef: result.providerRef, error: "invoice amount mismatch", invoice: paid };
+    }
     return { attempted: true, succeeded: true, providerRef: result.providerRef, invoice: paid };
   } catch (error) {
     return { attempted: true, succeeded: false, error: error instanceof Error ? error.message : String(error), invoice };

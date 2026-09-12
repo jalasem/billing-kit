@@ -1,0 +1,1 @@
+ALTER TYPE "public"."reconciliation_flag_kind" ADD VALUE 'invoice_amount_mismatch';

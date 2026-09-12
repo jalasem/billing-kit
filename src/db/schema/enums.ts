@@ -15,6 +15,7 @@ export const paymentStatusEnum = pgEnum("payment_status", ["succeeded", "failed"
 export const reconciliationFlagKindEnum = pgEnum("reconciliation_flag_kind", [
   "unsettled_payment",
   "unknown_settlement_ref",
+  "invoice_amount_mismatch",
 ]);
 
 export const planIntervalEnum = pgEnum("plan_interval", ["month", "year"]);

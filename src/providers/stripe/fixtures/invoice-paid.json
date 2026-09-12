@@ -12,11 +12,26 @@
       "id": "in_1PQRstInv001",
       "object": "invoice",
       "customer": "cus_NffrFeUfNV2Hib",
-      "subscription": "sub_1PQRstSub001",
       "amount_paid": 200000,
       "currency": "usd",
       "status": "paid",
       "created": 1735775990,
+      "parent": {
+        "type": "subscription_details",
+        "subscription_details": {
+          "subscription": "sub_1PQRstSub001"
+        }
+      },
+      "lines": {
+        "object": "list",
+        "data": [
+          {
+            "id": "il_1PQRstInvoiceLine001",
+            "object": "line_item",
+            "period": { "start": 1735689600, "end": 1738368000 }
+          }
+        ]
+      },
       "payments": {
         "object": "list",
         "data": [

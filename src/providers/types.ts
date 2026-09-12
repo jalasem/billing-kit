@@ -11,6 +11,10 @@ export type NormalisedEvent =
       customerRef?: string;
       money: Money;
       fee?: Money;
+      /** Set when the provider's own event carries it (e.g. a Stripe invoice's `subscription`) — used to link this payment to a billing-kit invoice by subscription + period when `provider_ref` alone can't. */
+      providerSubscriptionId?: string;
+      periodStart?: Date;
+      periodEnd?: Date;
       occurredAt: Date;
       raw: unknown;
     }
@@ -21,6 +25,9 @@ export type NormalisedEvent =
       customerRef?: string;
       money: Money;
       reason?: string;
+      providerSubscriptionId?: string;
+      periodStart?: Date;
+      periodEnd?: Date;
       occurredAt: Date;
       raw: unknown;
     }

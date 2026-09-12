@@ -12,11 +12,16 @@
       "id": "in_1PQRstInv002",
       "object": "invoice",
       "customer": "cus_NffrFeUfNV2Hib",
-      "subscription": "sub_1PQRstSub001",
       "amount_due": 200000,
       "currency": "usd",
       "status": "open",
       "created": 1735862390,
+      "parent": {
+        "type": "subscription_details",
+        "subscription_details": {
+          "subscription": "sub_1PQRstSub001"
+        }
+      },
       "last_finalization_error": {
         "code": "card_declined",
         "message": "Your card was declined."

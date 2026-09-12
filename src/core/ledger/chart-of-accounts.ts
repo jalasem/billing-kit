@@ -19,6 +19,11 @@ function specsFor(currency: string): AccountSpec[] {
   const perProvider = PROVIDERS.flatMap((provider) => [
     { code: `cash:${provider}:${cur}`, name: `${provider} clearing (${cur})`, type: "asset" as const },
     { code: `fees:${provider}:${cur}`, name: `${provider} fees (${cur})`, type: "expense" as const },
+    // Money received that couldn't be matched to what it was meant to pay
+    // (an invoice-linked payment whose amount/currency didn't match the
+    // invoice — see `markInvoicePaid`'s mismatch path). A liability: it is
+    // money held pending resolution, not revenue we've earned yet.
+    { code: `unapplied:${provider}:${cur}`, name: `${provider} unapplied receipts (${cur})`, type: "liability" as const },
   ]);
 
   return [
@@ -58,4 +63,5 @@ export const chartOfAccounts = {
   revenue: (currency: string) => `revenue:${currency.toUpperCase()}`,
   refunds: (currency: string) => `refunds:${currency.toUpperCase()}`,
   receivable: (currency: string) => `receivable:${currency.toUpperCase()}`,
+  unapplied: (provider: string, currency: string) => `unapplied:${provider}:${currency.toUpperCase()}`,
 };

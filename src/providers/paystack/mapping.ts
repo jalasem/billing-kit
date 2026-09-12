@@ -24,6 +24,14 @@ interface PaystackCustomer {
   email?: string;
 }
 
+// `charge.success` carries a `plan` field on a subscription-driven charge
+// (per Paystack's docs), but that is a *plan* code, not a *subscription*
+// code — `subscriptions.provider_subscription_id` stores the subscription
+// code from `PaystackProvider.createSubscription`, a different id space.
+// Mapping `plan` to `providerSubscriptionId` here would never actually
+// match anything in `linkInvoiceBySubscription`, so it is deliberately
+// left unmapped rather than adding a field that looks wired up but isn't;
+// see the M3 fix-round report.
 interface PaystackChargeSuccessData {
   reference: string;
   amount: number;
@@ -41,6 +49,7 @@ interface PaystackInvoicePaymentFailedData {
   created_at?: string;
   customer?: PaystackCustomer;
   transaction?: { reference?: string; currency?: string };
+  subscription?: { subscription_code?: string };
 }
 
 interface PaystackRefundProcessedData {
@@ -139,6 +148,12 @@ function mapPaystackEventUnsafe(envelope: { event: string; data: unknown }): Nor
         customerRef: data.customer?.customer_code,
         money,
         reason: data.description ?? undefined,
+        // Unlike `charge.success`, Paystack's invoice object does carry its
+        // actual subscription code — this one is the correct id space for
+        // `linkInvoiceBySubscription` (unverified against a live account;
+        // see the M3 fix-round report). Paystack's invoice payload has no
+        // service-period fields to map to `periodStart`/`periodEnd`.
+        providerSubscriptionId: data.subscription?.subscription_code,
         occurredAt: data.created_at ? new Date(data.created_at) : occurredAtFallback,
         raw: envelope,
       };

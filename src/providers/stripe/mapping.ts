@@ -60,6 +60,37 @@ function paymentIntentFromInvoice(invoice: Stripe.Invoice): string | Stripe.Paym
 }
 
 /**
+ * Modern Stripe invoices don't carry `subscription` at the top level either
+ * (also removed in favour of `parent.subscription_details.subscription`).
+ * Used to link an `invoice.paid`/`invoice.payment_failed` event back to a
+ * billing-kit invoice for the same subscription (see
+ * `linkInvoiceBySubscription`) when `provider_ref` alone doesn't match —
+ * this expansion depth (like `paymentIntentFromInvoice`'s) is unverified
+ * against a real test-mode event; see the M3 fix-round report.
+ */
+function subscriptionIdFromInvoice(invoice: Stripe.Invoice): string | undefined {
+  return idOf(invoice.parent?.subscription_details?.subscription ?? undefined);
+}
+
+/**
+ * The service period Stripe reports for the invoice, read off its first
+ * line item (Stripe invoices don't carry a single top-level period once a
+ * subscription can be prorated across several lines; the first line is
+ * treated as representative — good enough for the "which billing-kit
+ * invoice is this reporting on" matching, not for exact reconciliation).
+ * Stripe documents both bounds as inclusive, unlike billing-kit's own
+ * period_start-inclusive/period_end-exclusive convention — left as-is
+ * (unverified) rather than guessing at an off-by-one adjustment.
+ */
+function periodFromInvoice(invoice: Stripe.Invoice): { periodStart?: Date; periodEnd?: Date } {
+  const period = invoice.lines?.data[0]?.period;
+  if (!period) {
+    return {};
+  }
+  return { periodStart: new Date(period.start * 1000), periodEnd: new Date(period.end * 1000) };
+}
+
+/**
  * Picks the refund `charge.refunded` is actually reporting. Stripe's
  * `refunds` list is not documented to be in any particular order and can
  * contain every refund ever applied to the charge, not just this event's:
@@ -149,6 +180,8 @@ function mapStripeEventUnsafe(event: Stripe.Event): NormalisedEvent | undefined 
         customerRef: idOf(invoice.customer) ?? undefined,
         money: parseMoney(invoice.amount_paid, invoice.currency),
         fee: feeFromExpandedPaymentIntent(paymentIntent),
+        providerSubscriptionId: subscriptionIdFromInvoice(invoice),
+        ...periodFromInvoice(invoice),
         occurredAt,
         raw: event,
       };
@@ -164,6 +197,8 @@ function mapStripeEventUnsafe(event: Stripe.Event): NormalisedEvent | undefined 
         customerRef: idOf(invoice.customer) ?? undefined,
         money: parseMoney(invoice.amount_due, invoice.currency),
         reason: invoice.last_finalization_error?.message ?? undefined,
+        providerSubscriptionId: subscriptionIdFromInvoice(invoice),
+        ...periodFromInvoice(invoice),
         occurredAt,
         raw: event,
       };

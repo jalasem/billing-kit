@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { recoverSubscriptionForPaidInvoice } from "@/core/billing/dunning/recover";
+import { linkInvoiceBySubscription } from "@/core/billing/invoices/link-by-subscription";
 import { markInvoicePaid } from "@/core/billing/invoices/pay";
 import { chartOfAccounts, ensureChartOfAccounts, postEntry } from "@/core/ledger";
 import { customers, invoices, payments } from "@/db/schema";
@@ -29,9 +30,12 @@ async function resolveCustomerId(db: DbOrTx, provider: ProviderId, customerRef?:
  *
  * M3 resolution: if `event.providerRef` matches an `open` invoice's
  * `provider_ref` (set proactively when billing-kit initiates a charge for
- * that invoice — see `attemptInvoicePayment`), this is an invoice payment:
- * post against `receivable` and mark the invoice paid instead of the
- * one-off cash/revenue posting below.
+ * that invoice — see `attemptInvoicePayment` — or by `linkInvoiceBySubscription`
+ * below for a provider-mode subscription), this is an invoice payment: post
+ * against `receivable` and mark the invoice paid instead of the one-off
+ * cash/revenue posting below. The provider's reported amount/currency is
+ * not assumed to equal the invoice's own total — see `markInvoicePaid`'s
+ * `"unapplied"` outcome for what happens when they don't match.
  */
 export async function handlePaymentSucceeded(
   db: DbOrTx,
@@ -40,6 +44,8 @@ export async function handlePaymentSucceeded(
 ): Promise<void> {
   const currency = event.money.currency.toUpperCase();
   await ensureChartOfAccounts(db, currency);
+
+  await linkInvoiceBySubscription(db, provider, event);
 
   // Not filtered to `status = "open"`: a replay of an event that already
   // paid this invoice must still be recognized as invoice-linked (and
@@ -60,9 +66,11 @@ export async function handlePaymentSucceeded(
     );
 
   if (linkedInvoice) {
-    const paid = await markInvoicePaid(db, linkedInvoice, {
+    const { invoice: result, outcome, entryId } = await markInvoicePaid(db, linkedInvoice, {
       provider,
       providerRef: event.providerRef,
+      amount: event.money.amount,
+      currency: event.money.currency,
       fee: event.fee,
       occurredAt: event.occurredAt,
     });
@@ -73,20 +81,22 @@ export async function handlePaymentSucceeded(
       .values({
         provider,
         providerRef: event.providerRef,
-        customerId: customerId ?? paid.customerId,
+        customerId: customerId ?? result.customerId,
         amount: event.money.amount,
         currency,
         fee: event.fee?.amount ?? 0n,
         status: "succeeded",
-        entryId: paid.paidEntryId,
+        entryId,
         occurredAt: event.occurredAt,
       })
       .onConflictDoUpdate({
         target: [payments.provider, payments.providerRef],
-        set: { status: "succeeded", entryId: paid.paidEntryId },
+        set: { status: "succeeded", entryId },
       });
 
-    await recoverSubscriptionForPaidInvoice(db, paid);
+    if (outcome === "paid") {
+      await recoverSubscriptionForPaidInvoice(db, result);
+    }
     return;
   }
 

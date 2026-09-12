@@ -54,6 +54,7 @@ provider-scoped accounts per supported `ProviderId` (`stripe`, `paystack`,
 | `revenue:{CUR}` | revenue | Earned revenue. |
 | `refunds:{CUR}` | expense | Contra-revenue: money returned to customers, kept as its own account rather than reversing `revenue`. |
 | `receivable:{CUR}` | asset | Amounts owed to us that have not yet been collected (invoicing, from M3). |
+| `unapplied:{provider}:{CUR}` | liability | Money received against an invoice-linked payment whose amount/currency didn't match the invoice (from the M3 fix round) — held pending manual resolution, not revenue. |
 
 ### Webhook ingestion postings
 
@@ -97,13 +98,35 @@ or reconciliation run is a no-op.
 - **M2/M3 resolution — `payment.succeeded` and `payment.failed` against an
   invoice**: if the event's `provider_ref` matches an invoice's own
   `provider_ref` (set the moment billing-kit initiates a charge for that
-  invoice, win or lose — see `attemptInvoicePayment`), it is an invoice
-  payment: `payment.succeeded` posts the "paid" entry above (against
-  `receivable`, not `revenue` — revenue was already recognised when the
-  invoice was issued) and marks the invoice paid; `payment.failed` starts
-  dunning instead of posting anything (a failed payment never moved
-  money). An event matching no invoice falls through to the plain one-off
+  invoice, win or lose — see `attemptInvoicePayment` — or resolved from a
+  `providerSubscriptionId` + period match for a provider-mode subscription,
+  see `linkInvoiceBySubscription`), it is an invoice payment:
+  `payment.succeeded` posts the "paid" entry above (against `receivable`,
+  not `revenue` — revenue was already recognised when the invoice was
+  issued) and marks the invoice paid; `payment.failed` starts dunning
+  instead of posting anything (a failed payment never moved money). An
+  event matching no invoice falls through to the plain one-off
   `cash`/`revenue` posting from M2, unchanged.
+- **Amount/currency mismatch on an invoice-linked payment** (M3 fix round):
+  `markInvoicePaid` never assumes the provider's reported amount/currency
+  equals the invoice's own total/currency. When they don't match, the
+  invoice is **not** marked paid — it stays `open` — and instead: (1) a
+  `reconciliation_flags` row of kind `invoice_amount_mismatch` is raised,
+  recording both the expected (invoice) and actual (event) amount and
+  currency, and (2) the money is still posted, as a one-off receipt against
+  `unapplied:{provider}:{CUR}` (debit `cash:{provider}:{CUR}`, credit
+  `unapplied:{provider}:{CUR}`) so it is never lost from the ledger even
+  though it wasn't applied to anything. An operator resolves the flag by
+  investigating and posting a correcting entry by hand (out of scope for
+  M3 — no automated resolution flow exists yet). Idempotent per
+  `(provider, provider_ref)`, so a redelivered mismatched event doesn't
+  double-post the receipt or raise a second flag.
+- **Paying an invoice that isn't `open`**: `markInvoicePaid` enforces state
+  at the source of truth. An invoice already `paid` is a no-op replay
+  (returns unchanged, posts nothing). Any other non-`open` status
+  (`draft`, `void`, `uncollectible`) throws `InvalidInvoiceStateError`
+  rather than silently posting a paid entry against, say, a written-off
+  invoice.
 - **Proration** (plan change mid-period): daily, calendar-day policy —
   **`period_start` is inclusive, `period_end` is exclusive**. Both the old
   and new plan's full-period amount is amortised over the same

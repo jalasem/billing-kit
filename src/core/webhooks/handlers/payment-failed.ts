@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { startDunningForFailedInvoice } from "@/core/billing/dunning/start";
+import { linkInvoiceBySubscription } from "@/core/billing/invoices/link-by-subscription";
 import { customers, invoices, payments, subscriptions } from "@/db/schema";
 import type { NormalisedEvent, ProviderId } from "@/providers/types";
 
@@ -9,9 +10,10 @@ type PaymentFailedEvent = Extract<NormalisedEvent, { type: "payment.failed" }>;
 /**
  * No ledger entry: a failed payment never moved money. If
  * `event.providerRef` matches an `open` invoice tied to a subscription
- * (see `handlePaymentSucceeded`'s matching note), this is the provider
- * reporting a failed attempt at collecting that invoice — start dunning the
- * same way a kit-mode charge failure does.
+ * (see `handlePaymentSucceeded`'s matching note, including provider-mode
+ * linkage via `linkInvoiceBySubscription`), this is the provider reporting
+ * a failed attempt at collecting that invoice — start dunning the same way
+ * a kit-mode charge failure does.
  */
 export async function handlePaymentFailed(db: DbOrTx, provider: ProviderId, event: PaymentFailedEvent): Promise<void> {
   await db
@@ -28,6 +30,8 @@ export async function handlePaymentFailed(db: DbOrTx, provider: ProviderId, even
       target: [payments.provider, payments.providerRef],
       set: { status: "failed" },
     });
+
+  await linkInvoiceBySubscription(db, provider, event);
 
   const [linkedInvoice] = await db
     .select()
