@@ -14,6 +14,10 @@ export default defineConfig({
     // Full-lifecycle tests make many sequential round trips against a real
     // Postgres instance; the default 5s is too tight on a loaded machine.
     testTimeout: 15000,
+    // `beforeEach` truncates every table before each test; under load
+    // (lock contention from a prior test's advisory locks, a slow CI
+    // runner) the default 10s hook timeout was occasionally too tight.
+    hookTimeout: 30000,
   },
   resolve: {
     alias: {
