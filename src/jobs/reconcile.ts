@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { postSettlement } from "@/core/webhooks/settlement";
 import { payments, reconciliationFlags } from "@/db/schema";
@@ -116,7 +116,15 @@ export async function reconcile(
   return summaries;
 }
 
-/** Inserts a flag only if no unresolved flag already exists for the same (kind, provider, ref). Returns whether it created one. */
+/**
+ * Inserts a flag unless an unresolved one already exists for the same
+ * (kind, provider, ref) — enforced by a partial unique index (see the
+ * `reconciliation_flags` schema), not a check-then-insert: two concurrent
+ * reconcile runs racing on the same gap both attempt the insert, and
+ * Postgres's `ON CONFLICT` arbiter guarantees only one of them creates a
+ * row, however the two statements interleave. Returns whether *this* call
+ * created one.
+ */
 async function flagOnce(
   db: DbOrTx,
   kind: "unsettled_payment" | "unknown_settlement_ref",
@@ -124,22 +132,14 @@ async function flagOnce(
   ref: string,
   details: Record<string, unknown>,
 ): Promise<boolean> {
-  const [existing] = await db
-    .select({ id: reconciliationFlags.id })
-    .from(reconciliationFlags)
-    .where(
-      and(
-        eq(reconciliationFlags.kind, kind),
-        eq(reconciliationFlags.provider, provider),
-        eq(reconciliationFlags.ref, ref),
-        isNull(reconciliationFlags.resolvedAt),
-      ),
-    );
+  const [inserted] = await db
+    .insert(reconciliationFlags)
+    .values({ kind, provider, ref, details })
+    .onConflictDoNothing({
+      target: [reconciliationFlags.kind, reconciliationFlags.provider, reconciliationFlags.ref],
+      where: sql`${reconciliationFlags.resolvedAt} is null`,
+    })
+    .returning();
 
-  if (existing) {
-    return false;
-  }
-
-  await db.insert(reconciliationFlags).values({ kind, provider, ref, details });
-  return true;
+  return Boolean(inserted);
 }

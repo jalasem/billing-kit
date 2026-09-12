@@ -80,7 +80,13 @@ export async function postSettlement(db: DbOrTx, input: PostSettlementInput): Pr
     postings,
   });
 
-  await db
+  // The `existing` check above is a fast path, not the source of truth: two
+  // concurrent calls for the same settlement can both pass it (classic
+  // check-then-act race). `postEntry` is idempotent either way (both land
+  // on the same ledger entry), but only one of these inserts actually wins
+  // — `.returning()` tells us which, so `created` reflects reality instead
+  // of assuming this call was first because it got this far.
+  const [inserted] = await db
     .insert(settlements)
     .values({
       provider: input.provider,
@@ -91,7 +97,8 @@ export async function postSettlement(db: DbOrTx, input: PostSettlementInput): Pr
       settledAt: input.settledAt,
       entryId: entry.id,
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing({ target: [settlements.provider, settlements.settlementId] })
+    .returning();
 
-  return { created: true };
+  return { created: Boolean(inserted) };
 }

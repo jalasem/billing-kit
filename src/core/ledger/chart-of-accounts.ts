@@ -1,6 +1,5 @@
 import type { DbOrTx } from "@/db/client";
-import type { Account } from "@/db/schema";
-import { createAccount, getAccountByCode } from "./accounts";
+import { accounts, type Account } from "@/db/schema";
 
 /**
  * Every provider billing-kit ships an adapter for. The chart of accounts
@@ -35,16 +34,20 @@ function specsFor(currency: string): AccountSpec[] {
 
 /**
  * Creates the chart of accounts for a currency if it does not already
- * exist. Safe to call repeatedly (e.g. once per webhook or job run): an
- * existing account is left untouched.
+ * exist. Safe to call repeatedly, including concurrently (e.g. two webhook
+ * deliveries or a reconcile run racing a webhook, both needing the same
+ * currency's accounts for the first time): each account is inserted with
+ * `ON CONFLICT DO NOTHING` rather than a check-then-insert, so a race
+ * between two callers can't throw a duplicate-key error — the loser's
+ * insert is just a no-op, and the account it wanted already exists either
+ * way.
  */
 export async function ensureChartOfAccounts(db: DbOrTx, currency: string): Promise<void> {
-  for (const spec of specsFor(currency)) {
-    const existing = await getAccountByCode(db, spec.code);
-    if (!existing) {
-      await createAccount(db, { code: spec.code, name: spec.name, type: spec.type, currency });
-    }
-  }
+  const cur = currency.toUpperCase();
+  await db
+    .insert(accounts)
+    .values(specsFor(cur).map((spec) => ({ code: spec.code, name: spec.name, type: spec.type, currency: cur })))
+    .onConflictDoNothing({ target: accounts.code });
 }
 
 /** Account code helpers, kept next to the chart so callers can't typo a provider or currency in. */

@@ -133,6 +133,44 @@ describe("reconcileProvider", () => {
 
     expect(flags).toHaveLength(0);
   });
+
+  it("two concurrent runs over the same gap create no duplicate flags or entries", async () => {
+    const provider = new FakeProvider();
+    provider.seedSettlement({
+      settlementId: "stl_concurrent",
+      money: { amount: 40000n, currency: "NGN" },
+      fee: { amount: 0n, currency: "NGN" },
+      settledAt: NOW,
+      paymentRefs: ["ch_concurrent_unknown"],
+    });
+
+    const options = { from: new Date(0), to: NOW };
+    const [a, b] = await Promise.all([
+      reconcileProvider(db, "fake", provider, options),
+      reconcileProvider(db, "fake", provider, options),
+    ]);
+
+    // Exactly one of the two runs should get credit for each creation;
+    // together they must total exactly one settlement and one flag.
+    expect(a.settlementsPosted + b.settlementsPosted).toBe(1);
+    expect(a.unknownSettlementRefFlags + b.unknownSettlementRefFlags).toBe(1);
+
+    const settlementRows = await db.select().from(settlements).where(eq(settlements.settlementId, "stl_concurrent"));
+    expect(settlementRows).toHaveLength(1);
+
+    const flagRows = await db
+      .select()
+      .from(reconciliationFlags)
+      .where(
+        and(
+          eq(reconciliationFlags.kind, "unknown_settlement_ref"),
+          eq(reconciliationFlags.ref, "ch_concurrent_unknown"),
+        ),
+      );
+    expect(flagRows).toHaveLength(1);
+
+    expect(await getBalance(db, "bank:NGN")).toBe(40000n);
+  });
 });
 
 describe("reconcile", () => {
