@@ -251,6 +251,20 @@ describe("deadlock safety", () => {
   });
 });
 
+describe("balances for an untouched account", () => {
+  it("getBalance and recomputeBalance both return 0n", async () => {
+    const untouched = await createAccount(db, {
+      code: "untouched",
+      name: "Untouched",
+      type: "asset",
+      currency: "NGN",
+    });
+
+    expect(await getBalance(db, untouched.code)).toBe(0n);
+    expect(await recomputeBalance(db, untouched.code)).toBe(0n);
+  });
+});
+
 describe("invariant 5: cached balances match the sum of postings", () => {
   it("matches recomputeBalance for every account after 200 random balanced entries", async () => {
     const codes = ["a1", "a2", "a3", "a4", "a5"];

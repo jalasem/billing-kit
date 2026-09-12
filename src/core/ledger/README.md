@@ -39,4 +39,17 @@ await postEntry(db, {
 The three postings sum to zero (`985000 + 15000 - 1000000 = 0`); the fee is
 never silently netted out of the revenue figure.
 
+## Operational note: the app's database role
+
+Every invariant above (zero-sum, currency match, append-only, minimum two
+postings) is enforced by triggers, not by application code. That guarantee
+only holds if the Postgres role the app connects as cannot route around
+them: it must **not** have `TRUNCATE` on `entries` or `postings` (`TRUNCATE`
+does not fire row-level `DELETE` triggers, so it would silently erase ledger
+history) and must not have privileges to disable or drop the triggers
+themselves (`ALTER TABLE ... DISABLE TRIGGER`, or superuser). Grant a
+narrower role `SELECT, INSERT` on `entries`/`postings` in production; reserve
+`TRUNCATE` and trigger management for migrations, run under a separate,
+more trusted role.
+
 Further reading: ["Ledger design for money you can't get wrong"](https://www.abdulsamii.com/#writing).

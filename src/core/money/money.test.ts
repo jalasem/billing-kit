@@ -38,7 +38,7 @@ describe("bigint arithmetic", () => {
 
 describe("format", () => {
   it("formats minor units as a localized currency string", () => {
-    expect(format(150000n, "NGN", "en-NG")).toContain("1,500");
+    expect(format(150000n, "NGN", "en-NG")).toBe("₦1,500.00");
     expect(format(150000n, "USD", "en-US")).toBe("$1,500.00");
     expect(format(-500n, "USD", "en-US")).toBe("-$5.00");
   });
