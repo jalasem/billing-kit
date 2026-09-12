@@ -23,14 +23,14 @@ Design: `docs/superpowers/specs/2026-09-12-billing-kit-design.md`.
 
 ## M2 — Providers and webhooks (done when: a Stripe and a Paystack test payment each land as ledger entries via webhook, and replaying the webhook changes nothing)
 
-- [ ] `PaymentProvider` interface and the `fake` provider
-- [ ] Stripe adapter: customers, checkout sessions, subscriptions, signature verification, event parsing
-- [ ] Paystack adapter: customers, transaction initialisation, plans and subscriptions, HMAC-SHA512 signature verification, event parsing
-- [ ] Normalised event vocabulary (`payment.succeeded`, `payment.failed`, `subscription.updated`, `refund.succeeded`, `settlement.posted`)
-- [ ] `api/webhooks/[provider]` ingestion with `webhook_events` uniqueness and replay tests
-- [ ] Fees and settlements posted as their own ledger entries
-- [ ] `reconcile` job: match provider settlements to entries, flag gaps, never duplicate
-- [ ] Recorded fixtures for both providers; contract tests for the interface
+- [x] `PaymentProvider` interface and the `fake` provider
+- [x] Stripe adapter: customers, checkout sessions, subscriptions, signature verification, event parsing
+- [x] Paystack adapter: customers, transaction initialisation, plans and subscriptions, HMAC-SHA512 signature verification, event parsing
+- [x] Normalised event vocabulary (`payment.succeeded`, `payment.failed`, `subscription.updated`, `refund.succeeded`, `settlement.posted`)
+- [x] `api/webhooks/[provider]` ingestion with `webhook_events` uniqueness and replay tests
+- [x] Fees and settlements posted as their own ledger entries
+- [x] `reconcile` job: match provider settlements to entries, flag gaps, never duplicate
+- [x] Recorded fixtures for both providers; contract tests for the interface
 
 ## M3 — Subscriptions, invoices, and dunning (done when: a subscription can be created, renewed, fail payment, recover, and cancel with the ledger and invoices correct at every step)
 
