@@ -8,6 +8,7 @@ import { startDunningForFailedInvoice } from "../dunning/start";
 import { attemptInvoicePayment } from "../invoices/attempt-payment";
 import { issueInvoiceForPeriod } from "../invoices/issue";
 import { getPlanById } from "../plans";
+import { PlanNotActiveError } from "./errors";
 
 export interface CreateSubscriptionInput {
   customerId: string;
@@ -33,6 +34,10 @@ export interface CreateSubscriptionResult {
  * and, if the customer already has a saved payment method, charged
  * immediately; a failed first charge moves the subscription to `past_due`
  * and starts dunning the same way a later renewal failure would.
+ *
+ * Throws `PlanNotActiveError` if the plan has been deactivated
+ * (`plans.active = false`) — a customer must not be able to subscribe to a
+ * plan an operator has retired.
  */
 export async function createSubscription(
   db: DbOrTx,
@@ -40,6 +45,9 @@ export async function createSubscription(
   input: CreateSubscriptionInput,
 ): Promise<CreateSubscriptionResult> {
   const plan = await getPlanById(db, input.planId);
+  if (!plan.active) {
+    throw new PlanNotActiveError(plan.id);
+  }
   const [customer] = await db.select().from(customers).where(eq(customers.id, input.customerId));
   if (!customer) {
     throw new Error(`Unknown customer: ${input.customerId}`);

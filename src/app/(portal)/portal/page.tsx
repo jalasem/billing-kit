@@ -30,6 +30,11 @@ export default async function PortalPage({ searchParams }: { searchParams: Promi
           That change isn&apos;t available for your subscription right now.
         </p>
       )}
+      {params.error === "plan_inactive" && (
+        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+          That plan is no longer available. Please choose a different plan.
+        </p>
+      )}
       {params.updated === "1" && (
         <p className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-800" role="status">
           Your subscription was updated.

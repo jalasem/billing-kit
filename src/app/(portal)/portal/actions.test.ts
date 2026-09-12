@@ -23,11 +23,11 @@ import { eq } from "drizzle-orm";
 import { createSessionRow } from "@/core/auth/session";
 import { createSubscription } from "@/core/billing/subscriptions/create";
 import { db } from "@/db/client";
-import { subscriptions } from "@/db/schema";
+import { plans, subscriptions } from "@/db/schema";
 import { FakeProvider } from "@/providers/fake";
 import { seedCustomer, seedPlan } from "@/test/billing-fixtures";
 import { resetM4Tables } from "@/test/reset-db";
-import { cancelAtPeriodEndAction } from "./actions";
+import { cancelAtPeriodEndAction, subscribeAction } from "./actions";
 
 const fakeProvider = new FakeProvider();
 
@@ -109,5 +109,17 @@ describe("portal server action authorization", () => {
 
     const [updated] = await db.select().from(subscriptions).where(eq(subscriptions.id, subscription.id));
     expect(updated.cancelAtPeriodEnd).toBe(true);
+  });
+
+  it("subscribeAction rejects a deactivated plan and creates no subscription", async () => {
+    const plan = await seedPlan(db, fakeProvider, { amount: 1000n, currency: "USD" });
+    await db.update(plans).set({ active: false }).where(eq(plans.id, plan.id));
+    const customer = await seedCustomer(db, { email: "wants-inactive-plan@example.com" });
+
+    await loginAs("wants-inactive-plan@example.com", customer.id);
+    await runAction(subscribeAction, formData({ planId: plan.id }));
+
+    const rows = await db.select().from(subscriptions).where(eq(subscriptions.customerId, customer.id));
+    expect(rows).toHaveLength(0);
   });
 });

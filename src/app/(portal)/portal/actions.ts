@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { InvalidTransitionError } from "@/core/billing/subscriptions/state";
 import { cancel, resume, resumeCancelAtPeriodEnd, pause } from "@/core/billing/subscriptions/lifecycle";
 import { createSubscription } from "@/core/billing/subscriptions/create";
+import { PlanNotActiveError } from "@/core/billing/subscriptions/errors";
 import { requireCustomerSession, UnauthorizedError, type CurrentSession } from "@/core/auth";
 import { db } from "@/db/client";
 import { subscriptions, type Subscription } from "@/db/schema";
@@ -26,6 +27,9 @@ function redirectWithOutcome(error: unknown): never {
   }
   if (error instanceof InvalidTransitionError) {
     redirect("/portal?error=invalid_transition");
+  }
+  if (error instanceof PlanNotActiveError) {
+    redirect("/portal?error=plan_inactive");
   }
   throw error;
 }
@@ -85,7 +89,11 @@ export async function subscribeAction(formData: FormData): Promise<void> {
   const session = await requireCustomerSession();
 
   const provider = defaultProviderForNewSubscriptions();
-  await createSubscription(db, provider, { customerId: session.customerId, planId });
+  try {
+    await createSubscription(db, provider, { customerId: session.customerId, planId });
+  } catch (error) {
+    redirectWithOutcome(error);
+  }
 
   redirect("/portal?updated=1");
 }
