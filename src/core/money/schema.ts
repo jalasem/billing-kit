@@ -9,10 +9,11 @@ const amountSchema = z.union([z.bigint(), z.number(), z.string()]).transform((va
   }
 
   if (typeof value === "number") {
-    if (!Number.isInteger(value)) {
+    if (!Number.isSafeInteger(value)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Amount must be an integer number of minor units",
+        message:
+          "Amount must be a safe integer number of minor units (±2^53-1); pass a string or bigint for larger amounts",
       });
       return z.NEVER;
     }

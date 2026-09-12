@@ -60,4 +60,15 @@ describe("moneySchema", () => {
     expect(() => moneySchema.parse({ amount: "abc", currency: "USD" })).toThrow();
     expect(() => moneySchema.parse({ amount: 100, currency: "ZZZ" })).toThrow();
   });
+
+  it("rejects a number amount beyond Number.MAX_SAFE_INTEGER but accepts the same value as a string", () => {
+    // 2**53 + 1 cannot even be represented exactly as a JS number (it rounds
+    // to 2**53), which is itself already unsafe: MAX_SAFE_INTEGER is 2**53-1.
+    const unsafeAsNumber = 2 ** 53 + 1;
+    const unsafeAsString = "9007199254740993"; // exact, only representable as a string or bigint
+
+    expect(() => moneySchema.parse({ amount: unsafeAsNumber, currency: "USD" })).toThrow(/safe integer/i);
+    expect(moneySchema.parse({ amount: unsafeAsString, currency: "USD" }).amount).toBe(9007199254740993n);
+    expect(moneySchema.parse({ amount: 9007199254740993n, currency: "USD" }).amount).toBe(9007199254740993n);
+  });
 });
