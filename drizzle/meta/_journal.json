@@ -43,6 +43,13 @@
       "when": 1789195125353,
       "tag": "0005_m2_providers_webhooks",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789198456066,
+      "tag": "0006_m2_fix_round",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { bigint, char, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { entries } from "./entries";
 import { payments } from "./payments";
+import { providerEnum } from "./enums";
 
 export const refunds = pgTable(
   "refunds",
@@ -9,10 +10,13 @@ export const refunds = pgTable(
     paymentId: uuid("payment_id")
       .notNull()
       .references(() => payments.id),
-    // Not in the brief's column list, but replay safety needs a dedupe key:
-    // without it, replaying a refund.succeeded webhook would insert a second
-    // refunds row (postEntry's own idempotency key already stops it from
-    // posting a second ledger entry).
+    // provider + providerRef are not in the brief's column list, but replay
+    // safety needs a dedupe key: without it, replaying a refund.succeeded
+    // webhook would insert a second refunds row (postEntry's own
+    // idempotency key already stops it from posting a second ledger
+    // entry). Scoped to (provider, provider_ref), not provider_ref alone,
+    // since a refund id/reference is only unique within its own provider.
+    provider: providerEnum("provider").notNull(),
     providerRef: text("provider_ref").notNull(),
     amount: bigint("amount", { mode: "bigint" }).notNull(),
     currency: char("currency", { length: 3 }).notNull(),
@@ -21,7 +25,7 @@ export const refunds = pgTable(
       .references(() => entries.id),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
   },
-  (table) => [unique("refunds_provider_ref_unique").on(table.providerRef)],
+  (table) => [unique("refunds_provider_provider_ref_unique").on(table.provider, table.providerRef)],
 );
 
 export type Refund = typeof refunds.$inferSelect;
