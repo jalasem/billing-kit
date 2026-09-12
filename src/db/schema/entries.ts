@@ -6,6 +6,9 @@ export const entries = pgTable("entries", {
   description: text("description").notNull(),
   reference: text("reference"),
   idempotencyKey: text("idempotency_key").unique(),
+  // sha256 of the canonicalized request that created this entry, used to
+  // detect a replayed idempotencyKey being reused with a different request.
+  requestHash: text("request_hash"),
   metadata: jsonb("metadata").notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

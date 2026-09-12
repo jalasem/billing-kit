@@ -1,14 +1,17 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { accountBalances, accounts, auditLog, entries, postings, type Posting } from "@/db/schema";
+import { IdempotencyConflictError } from "./errors";
+import { computeRequestHash } from "./request-hash";
 import type { PostEntryInput, PostEntryResult, PostingInput } from "./types";
 
 export async function postEntry(db: DbOrTx, input: PostEntryInput): Promise<PostEntryResult> {
   assertBalanced(input.postings);
+  const requestHash = computeRequestHash(input.description, input.postings);
 
   return db.transaction(async (tx) => {
     if (input.idempotencyKey) {
-      const replay = await replayIfAlreadyPosted(tx, input.idempotencyKey);
+      const replay = await replayIfAlreadyPosted(tx, input.idempotencyKey, requestHash);
       if (replay) {
         return replay;
       }
@@ -23,6 +26,7 @@ export async function postEntry(db: DbOrTx, input: PostEntryInput): Promise<Post
         description: input.description,
         reference: input.reference,
         idempotencyKey: input.idempotencyKey,
+        requestHash,
         metadata: input.metadata ?? {},
       })
       .returning();
@@ -69,11 +73,14 @@ export async function postEntry(db: DbOrTx, input: PostEntryInput): Promise<Post
 /**
  * Takes an advisory lock scoped to this idempotency key, for the life of the
  * transaction, so two concurrent posts of the same key serialize instead of
- * racing to insert the same entry.
+ * racing to insert the same entry. If the key was already used for a
+ * different request (different description or postings), the replay is
+ * refused rather than silently returning someone else's entry.
  */
 async function replayIfAlreadyPosted(
   tx: DbOrTx,
   idempotencyKey: string,
+  requestHash: string,
 ): Promise<PostEntryResult | undefined> {
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtextextended(${`ledger:entry:${idempotencyKey}`}, 0))`,
@@ -82,6 +89,10 @@ async function replayIfAlreadyPosted(
   const [existingEntry] = await tx.select().from(entries).where(eq(entries.idempotencyKey, idempotencyKey));
   if (!existingEntry) {
     return undefined;
+  }
+
+  if (existingEntry.requestHash !== requestHash) {
+    throw new IdempotencyConflictError(idempotencyKey);
   }
 
   const existingPostings = await tx.select().from(postings).where(eq(postings.entryId, existingEntry.id));

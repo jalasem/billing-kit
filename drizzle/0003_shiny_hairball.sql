@@ -1,0 +1,1 @@
+ALTER TABLE "entries" ADD COLUMN "request_hash" text;

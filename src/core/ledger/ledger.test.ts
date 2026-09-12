@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { accounts, entries, postings, type Account } from "@/db/schema";
 import { resetLedgerTables } from "@/test/reset-db";
-import { createAccount, getBalance, postEntry, recomputeBalance } from "./index";
+import { IdempotencyConflictError, createAccount, getBalance, postEntry, recomputeBalance } from "./index";
 
 let cash: Account;
 let revenue: Account;
@@ -150,6 +150,49 @@ describe("invariant 3: idempotent posting", () => {
     const rows = await db.select().from(entries).where(eq(entries.idempotencyKey, idempotencyKey));
     expect(rows).toHaveLength(1);
     expect(await getBalance(db, "cash")).toBe(250n);
+  });
+
+  it("replays the same entry when the same key is reused with the same postings", async () => {
+    const idempotencyKey = randomUUID();
+    const input = {
+      occurredAt: new Date(),
+      description: "replay test",
+      idempotencyKey,
+      postings: [
+        { accountCode: "cash", amount: 300n, currency: "NGN" },
+        { accountCode: "revenue", amount: -300n, currency: "NGN" },
+      ],
+    };
+
+    const first = await postEntry(db, input);
+    const second = await postEntry(db, { ...input, postings: [...input.postings] });
+
+    expect(second.entry.id).toBe(first.entry.id);
+  });
+
+  it("rejects reusing the same key with a different request", async () => {
+    const idempotencyKey = randomUUID();
+    await postEntry(db, {
+      occurredAt: new Date(),
+      description: "original request",
+      idempotencyKey,
+      postings: [
+        { accountCode: "cash", amount: 300n, currency: "NGN" },
+        { accountCode: "revenue", amount: -300n, currency: "NGN" },
+      ],
+    });
+
+    await expect(
+      postEntry(db, {
+        occurredAt: new Date(),
+        description: "original request",
+        idempotencyKey,
+        postings: [
+          { accountCode: "cash", amount: 400n, currency: "NGN" },
+          { accountCode: "revenue", amount: -400n, currency: "NGN" },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(IdempotencyConflictError);
   });
 });
 
