@@ -1,0 +1,26 @@
+{
+  "id": "evt_1PQRstInvoiceFailed",
+  "object": "event",
+  "api_version": "2025-08-27.basil",
+  "created": 1735862400,
+  "type": "invoice.payment_failed",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": { "id": null, "idempotency_key": null },
+  "data": {
+    "object": {
+      "id": "in_1PQRstInv002",
+      "object": "invoice",
+      "customer": "cus_NffrFeUfNV2Hib",
+      "subscription": "sub_1PQRstSub001",
+      "amount_due": 200000,
+      "currency": "usd",
+      "status": "open",
+      "created": 1735862390,
+      "last_finalization_error": {
+        "code": "card_declined",
+        "message": "Your card was declined."
+      }
+    }
+  }
+}

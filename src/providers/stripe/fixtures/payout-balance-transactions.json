@@ -1,0 +1,22 @@
+[
+  {
+    "id": "txn_3PQRstAbCdEf",
+    "object": "balance_transaction",
+    "type": "charge",
+    "source": "pi_3PQRstAbCdEf",
+    "amount": 500000,
+    "fee": 14800,
+    "net": 485200,
+    "currency": "usd"
+  },
+  {
+    "id": "txn_3PQRstInvoice001",
+    "object": "balance_transaction",
+    "type": "charge",
+    "source": "pi_3PQRstInvoice001",
+    "amount": 200000,
+    "fee": 6100,
+    "net": 193900,
+    "currency": "usd"
+  }
+]

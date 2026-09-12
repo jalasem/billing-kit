@@ -1,0 +1,51 @@
+{
+  "id": "evt_1PQRstInvoicePaid",
+  "object": "event",
+  "api_version": "2025-08-27.basil",
+  "created": 1735776000,
+  "type": "invoice.paid",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": { "id": null, "idempotency_key": null },
+  "data": {
+    "object": {
+      "id": "in_1PQRstInv001",
+      "object": "invoice",
+      "customer": "cus_NffrFeUfNV2Hib",
+      "subscription": "sub_1PQRstSub001",
+      "amount_paid": 200000,
+      "currency": "usd",
+      "status": "paid",
+      "created": 1735775990,
+      "payments": {
+        "object": "list",
+        "data": [
+          {
+            "id": "inpay_3PQRstInvoice001",
+            "object": "invoice_payment",
+            "status": "paid",
+            "payment": {
+              "type": "payment_intent",
+              "payment_intent": {
+                "id": "pi_3PQRstInvoice001",
+                "object": "payment_intent",
+                "latest_charge": {
+                  "id": "ch_3PQRstInvoice001",
+                  "object": "charge",
+                  "balance_transaction": {
+                    "id": "txn_3PQRstInvoice001",
+                    "object": "balance_transaction",
+                    "amount": 200000,
+                    "fee": 6100,
+                    "net": 193900,
+                    "currency": "usd"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

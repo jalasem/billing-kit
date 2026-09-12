@@ -1,0 +1,19 @@
+{
+  "id": "evt_1PQRstSubUpdated",
+  "object": "event",
+  "api_version": "2025-08-27.basil",
+  "created": 1736035200,
+  "type": "customer.subscription.updated",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": { "id": null, "idempotency_key": null },
+  "data": {
+    "object": {
+      "id": "sub_1PQRstSub001",
+      "object": "subscription",
+      "customer": "cus_NffrFeUfNV2Hib",
+      "status": "past_due",
+      "created": 1736035190
+    }
+  }
+}

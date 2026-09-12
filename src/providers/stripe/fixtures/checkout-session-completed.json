@@ -1,0 +1,41 @@
+{
+  "id": "evt_1PQRstCheckoutCompleted",
+  "object": "event",
+  "api_version": "2025-08-27.basil",
+  "created": 1735689600,
+  "type": "checkout.session.completed",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": { "id": null, "idempotency_key": null },
+  "data": {
+    "object": {
+      "id": "cs_test_a1b2c3d4e5",
+      "object": "checkout.session",
+      "amount_total": 500000,
+      "currency": "usd",
+      "customer": "cus_NffrFeUfNV2Hib",
+      "customer_email": "ada@example.com",
+      "client_reference_id": "order_123",
+      "payment_status": "paid",
+      "status": "complete",
+      "created": 1735689590,
+      "metadata": {},
+      "payment_intent": {
+        "id": "pi_3PQRstAbCdEf",
+        "object": "payment_intent",
+        "latest_charge": {
+          "id": "ch_3PQRstAbCdEf",
+          "object": "charge",
+          "balance_transaction": {
+            "id": "txn_3PQRstAbCdEf",
+            "object": "balance_transaction",
+            "amount": 500000,
+            "fee": 14800,
+            "net": 485200,
+            "currency": "usd"
+          }
+        }
+      }
+    }
+  }
+}

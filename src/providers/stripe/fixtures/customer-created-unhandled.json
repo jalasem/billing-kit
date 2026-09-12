@@ -1,0 +1,18 @@
+{
+  "id": "evt_1PQRstCustomerCreated",
+  "object": "event",
+  "api_version": "2025-08-27.basil",
+  "created": 1736294400,
+  "type": "customer.created",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": { "id": null, "idempotency_key": null },
+  "data": {
+    "object": {
+      "id": "cus_NffrFeUfNV2Hib",
+      "object": "customer",
+      "email": "ada@example.com",
+      "created": 1736294390
+    }
+  }
+}

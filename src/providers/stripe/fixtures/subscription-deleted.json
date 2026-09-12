@@ -1,0 +1,19 @@
+{
+  "id": "evt_1PQRstSubDeleted",
+  "object": "event",
+  "api_version": "2025-08-27.basil",
+  "created": 1736121600,
+  "type": "customer.subscription.deleted",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": { "id": null, "idempotency_key": null },
+  "data": {
+    "object": {
+      "id": "sub_1PQRstSub001",
+      "object": "subscription",
+      "customer": "cus_NffrFeUfNV2Hib",
+      "status": "canceled",
+      "created": 1736121590
+    }
+  }
+}
