@@ -4,4 +4,5 @@ export * from "./console";
 export * from "./resend";
 export * from "./send";
 export * from "./recording";
+export * from "./file";
 export * from "./default";

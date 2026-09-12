@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { notifications } from "@/db/schema";
-import type { NotificationKind, Notifier } from "./types";
+import { SENSITIVE_NOTIFICATION_KINDS, type NotificationKind, type Notifier } from "./types";
 
 /**
  * Records the notification first (so it exists even if sending throws),
@@ -9,6 +9,13 @@ import type { NotificationKind, Notifier } from "./types";
  * rather than throwing out of the caller's business transaction — dunning
  * must not fail to record a payment outcome just because the email
  * provider is down.
+ *
+ * For a `SENSITIVE_NOTIFICATION_KINDS` kind (e.g. `magic_link`, whose
+ * payload embeds a raw, unhashed token in a URL), the row persisted to
+ * `notifications.payload` is redacted to `{ kind, recipient, redacted:
+ * true }` — the real payload is passed only to `notifier.send()`, so the
+ * secret exists in memory for this one call and never touches the
+ * database.
  */
 export async function notify(
   db: DbOrTx,
@@ -17,9 +24,11 @@ export async function notify(
   recipient: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
+  const storedPayload = SENSITIVE_NOTIFICATION_KINDS.has(kind) ? { kind, recipient, redacted: true } : payload;
+
   const [row] = await db
     .insert(notifications)
-    .values({ kind, recipient, payload, channel: notifier.channel })
+    .values({ kind, recipient, payload: storedPayload, channel: notifier.channel })
     .returning();
 
   try {

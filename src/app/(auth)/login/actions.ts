@@ -1,20 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { RateLimitedError, requestMagicLink } from "@/core/auth";
+import { RateLimitedError, requestMagicLink, safeNext } from "@/core/auth";
 import { db } from "@/db/client";
-import { defaultNotifier } from "@/core/notify";
-
-function safeNext(value: FormDataEntryValue | null): string | undefined {
-  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return undefined;
-  }
-  return value;
-}
+import { magicLinkNotifier } from "@/core/notify";
 
 export async function requestMagicLinkAction(formData: FormData): Promise<void> {
   const email = String(formData.get("email") ?? "").trim();
-  const next = safeNext(formData.get("next"));
+  const next = safeNext(formData.get("next")?.toString());
   const nextQuery = next ? `&next=${encodeURIComponent(next)}` : "";
 
   if (!email) {
@@ -22,7 +15,7 @@ export async function requestMagicLinkAction(formData: FormData): Promise<void> 
   }
 
   try {
-    await requestMagicLink(db, email, { notifier: defaultNotifier(), next });
+    await requestMagicLink(db, email, { notifier: magicLinkNotifier(), next });
   } catch (error) {
     if (error instanceof RateLimitedError) {
       redirect(`/login?error=rate_limited${nextQuery}`);

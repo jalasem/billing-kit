@@ -21,6 +21,13 @@ export default defineConfig({
       // path aliases are guaranteed to be resolved.
       OPERATOR_EMAILS: "operator@example.com",
       APP_URL: "http://localhost:3000",
+      // Tells `magicLinkNotifier()` (src/core/notify/default.ts) to write
+      // magic-link URLs to e2e/.auth/ instead of sending them for real —
+      // read by e2e/helpers.ts. Not gated on NODE_ENV: `next build` bakes
+      // NODE_ENV=production into the compiled server regardless of what
+      // `next start` is later run with, so that check would never be true
+      // for the built app this suite runs against.
+      E2E_TOKEN_SINK: "1",
     },
   },
   use: {

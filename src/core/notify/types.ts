@@ -5,6 +5,13 @@ export type NotificationKind =
   | "payment_recovered"
   | "magic_link";
 
+/**
+ * Kinds whose payload carries a secret (a magic-link URL embeds the raw
+ * token) — `notify()` persists a redacted `notifications.payload` for
+ * these, and passes the real payload only to `Notifier.send()`.
+ */
+export const SENSITIVE_NOTIFICATION_KINDS: ReadonlySet<NotificationKind> = new Set(["magic_link"]);
+
 export interface NotificationTemplate {
   subject: string;
   text: string;

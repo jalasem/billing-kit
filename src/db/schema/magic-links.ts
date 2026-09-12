@@ -2,8 +2,11 @@ import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 /**
  * `token_hash` is the SHA-256 hex digest of the raw token; the raw token
- * itself is never stored, only emailed via the `Notifier` (see
- * `src/core/auth/magic-link.ts`).
+ * itself is never persisted anywhere — not here, and not in the
+ * `notifications` table either (its payload is redacted for the
+ * `magic_link` kind — see `notify()` in `src/core/notify/send.ts`). The
+ * only place the raw token exists is the URL handed to `Notifier.send()`
+ * (see `src/core/auth/magic-link.ts`).
  */
 export const magicLinks = pgTable("magic_links", {
   id: uuid("id").primaryKey().defaultRandom(),

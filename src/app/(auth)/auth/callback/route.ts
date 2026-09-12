@@ -1,13 +1,6 @@
 import { NextResponse } from "next/server";
-import { consumeMagicLink, InvalidMagicLinkError, isOperatorEmail, startSession } from "@/core/auth";
+import { consumeMagicLink, InvalidMagicLinkError, isOperatorEmail, safeNext, startSession } from "@/core/auth";
 import { db } from "@/db/client";
-
-function safeNext(value: string | null): string | undefined {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return undefined;
-  }
-  return value;
-}
 
 /**
  * Consumes a magic-link token, starts a session, and redirects into the

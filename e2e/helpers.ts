@@ -1,26 +1,33 @@
-import { desc, eq, and } from "drizzle-orm";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { notifications } from "@/db/schema";
-import { db } from "./db";
+
+const TOKEN_SINK_DIR = "e2e/.auth";
 
 /**
- * Reads the raw magic-link URL from the most recent `magic_link`
- * notification for `email` — there is no mailbox in CI, and the raw token
- * is never stored anywhere but this notification payload (see
- * `src/core/auth/magic-link.ts`).
+ * Reads the raw magic-link URL for `email` from the test-only file sink
+ * (`FileNotifier`, enabled by `E2E_TOKEN_SINK=1` — see
+ * `src/core/notify/default.ts`) instead of the `notifications` table:
+ * `notify()` redacts that table's payload for the `magic_link` kind, so
+ * the raw token is never there to read. Polls briefly since the file is
+ * written by a separate process (the app server).
  */
 export async function latestMagicLinkUrl(email: string): Promise<string> {
-  const [row] = await db
-    .select()
-    .from(notifications)
-    .where(and(eq(notifications.kind, "magic_link"), eq(notifications.recipient, email)))
-    .orderBy(desc(notifications.createdAt))
-    .limit(1);
-  if (!row) {
-    throw new Error(`No magic_link notification found for ${email}`);
+  const file = path.join(TOKEN_SINK_DIR, `magic_link-${encodeURIComponent(email)}.json`);
+
+  const deadline = Date.now() + 5000;
+  let lastError: unknown;
+  while (Date.now() < deadline) {
+    try {
+      const contents = await readFile(file, "utf8");
+      return (JSON.parse(contents) as { url: string }).url;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   }
-  return (row.payload as { url: string }).url;
+  throw new Error(`No magic-link token file found for ${email} at ${file}: ${String(lastError)}`);
 }
 
 /** Drives the real login form, then follows the magic link read from the database instead of a mailbox. */

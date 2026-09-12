@@ -1,10 +1,11 @@
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { notify } from "@/core/notify/send";
 import { ConsoleNotifier, type Notifier } from "@/core/notify";
 import { magicLinks, type Customer } from "@/db/schema";
 import { ensureCustomerByEmail } from "./ensure-customer";
 import { RateLimitedError, InvalidMagicLinkError } from "./errors";
+import { safeNext } from "./safe-next";
 import { generateToken, hashToken } from "./tokens";
 
 const LINK_TTL_MS = 15 * 60 * 1000;
@@ -30,6 +31,11 @@ export interface RequestMagicLinkResult {
  * link, and sends it through the `Notifier`. Rate limited to
  * `MAX_LINKS_PER_HOUR` requests per email per rolling hour, counted from
  * `magic_links` rows rather than a separate counter table.
+ *
+ * The count-then-insert is wrapped in a transaction holding an advisory
+ * lock keyed by the email, so two concurrent requests for the same address
+ * can't both pass the count check before either one inserts — without the
+ * lock, that race lets an email exceed `MAX_LINKS_PER_HOUR`.
  */
 export async function requestMagicLink(
   db: DbOrTx,
@@ -41,26 +47,31 @@ export async function requestMagicLink(
   const notifier = options.notifier ?? new ConsoleNotifier();
   const appUrl = options.appUrl ?? process.env.APP_URL ?? "http://localhost:3000";
 
-  const windowStart = new Date(now.getTime() - RATE_LIMIT_WINDOW_MS);
-  const recent = await db
-    .select({ id: magicLinks.id })
-    .from(magicLinks)
-    .where(and(eq(magicLinks.email, normalized), gt(magicLinks.createdAt, windowStart)));
-  if (recent.length >= MAX_LINKS_PER_HOUR) {
-    throw new RateLimitedError(normalized);
-  }
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`magic-link:request:${normalized}`}, 0))`);
 
-  const customer = await ensureCustomerByEmail(db, normalized);
+    const windowStart = new Date(now.getTime() - RATE_LIMIT_WINDOW_MS);
+    const recent = await tx
+      .select({ id: magicLinks.id })
+      .from(magicLinks)
+      .where(and(eq(magicLinks.email, normalized), gt(magicLinks.createdAt, windowStart)));
+    if (recent.length >= MAX_LINKS_PER_HOUR) {
+      throw new RateLimitedError(normalized);
+    }
 
-  const { token, hash } = generateToken();
-  const expiresAt = new Date(now.getTime() + LINK_TTL_MS);
-  await db.insert(magicLinks).values({ email: normalized, tokenHash: hash, expiresAt, createdAt: now });
+    const customer = await ensureCustomerByEmail(tx, normalized);
 
-  const nextParam = options.next && options.next.startsWith("/") && !options.next.startsWith("//") ? `&next=${encodeURIComponent(options.next)}` : "";
-  const url = `${appUrl}/auth/callback?token=${token}${nextParam}`;
-  await notify(db, notifier, "magic_link", normalized, { url });
+    const { token, hash } = generateToken();
+    const expiresAt = new Date(now.getTime() + LINK_TTL_MS);
+    await tx.insert(magicLinks).values({ email: normalized, tokenHash: hash, expiresAt, createdAt: now });
 
-  return { customer, token };
+    const next = safeNext(options.next);
+    const nextParam = next ? `&next=${encodeURIComponent(next)}` : "";
+    const url = `${appUrl}/auth/callback?token=${token}${nextParam}`;
+    await notify(tx, notifier, "magic_link", normalized, { url });
+
+    return { customer, token };
+  });
 }
 
 export interface ConsumeMagicLinkOptions {

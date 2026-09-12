@@ -1,6 +1,8 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { RecordingNotifier } from "@/core/notify";
+import { notifications } from "@/db/schema";
 import { resetM4Tables } from "@/test/reset-db";
 import { consumeMagicLink, requestMagicLink } from "./magic-link";
 import { RateLimitedError, InvalidMagicLinkError } from "./errors";
@@ -30,6 +32,23 @@ describe("requestMagicLink", () => {
     expect(notifier.sent).toHaveLength(1);
     expect(notifier.sent[0].kind).toBe("magic_link");
     expect(notifier.sent[0].recipient).toBe("notify@example.com");
+    expect(notifier.sent[0].payload.url).toBe(`https://app.test/auth/callback?token=${token}`);
+  });
+
+  it("persists a redacted payload on the notifications row — the raw token and URL are never stored", async () => {
+    const notifier = new RecordingNotifier();
+    const { token } = await requestMagicLink(db, "redacted@example.com", { notifier, appUrl: "https://app.test" });
+
+    const [row] = await db.select().from(notifications).where(eq(notifications.recipient, "redacted@example.com"));
+    expect(row).toBeDefined();
+    expect(row.payload).toEqual({ kind: "magic_link", recipient: "redacted@example.com", redacted: true });
+
+    const serialized = JSON.stringify(row.payload);
+    expect(serialized).not.toContain(token);
+    expect(serialized).not.toContain("http");
+    expect(serialized.toLowerCase()).not.toContain("url");
+
+    // The notifier itself still received the real payload — only the DB row is redacted.
     expect(notifier.sent[0].payload.url).toBe(`https://app.test/auth/callback?token=${token}`);
   });
 
