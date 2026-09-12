@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("renders the milestone 0 placeholder", async ({ page }) => {
+test("renders the homepage", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("billing-kit — milestone 0")).toBeVisible();
+  await expect(page.getByText("billing-kit — Stripe and Paystack billing")).toBeVisible();
 });
