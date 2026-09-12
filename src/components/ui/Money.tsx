@@ -5,9 +5,15 @@ export interface MoneyProps {
   amount: bigint;
   currency: string;
   className?: string;
+  /** Optional tooltip — e.g. the raw signed ledger balance, when `amount` shown is flipped to its natural-balance direction. */
+  title?: string;
 }
 
 /** Renders a minor-unit amount through the canonical `format()` helper — never a raw division in a component. */
-export function Money({ amount, currency, className }: MoneyProps) {
-  return <span className={className}>{format(amount, currency)}</span>;
+export function Money({ amount, currency, className, title }: MoneyProps) {
+  return (
+    <span className={className} title={title}>
+      {format(amount, currency)}
+    </span>
+  );
 }

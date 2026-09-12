@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { Button, Card, DateTime, Money, Table, Td, Th } from "@/components/ui";
-import { getAccountByCode, getBalance } from "@/core/ledger";
+import { getAccountByCode, getBalance, naturalBalance } from "@/core/ledger";
 import { db } from "@/db/client";
 import { entries, postings } from "@/db/schema";
 import { verifyAccountBalanceAction } from "@/app/(admin)/admin/actions";
@@ -24,8 +24,10 @@ export default async function LedgerAccountPage({
     notFound();
   }
 
-  const page = Math.max(1, Number(pageParam ?? "1") || 1);
+  const MAX_PAGE = 1000;
+  const page = Math.min(MAX_PAGE, Math.max(1, Number(pageParam ?? "1") || 1));
   const balance = await getBalance(db, code);
+  const natural = naturalBalance(account, balance);
 
   const rows = await db
     .select({ posting: postings, entry: entries })
@@ -49,8 +51,9 @@ export default async function LedgerAccountPage({
         <div>
           <p className="text-sm text-slate-500">Cached balance</p>
           <p className="text-2xl font-semibold text-slate-900">
-            <Money amount={balance} currency={account.currency} />
+            <Money amount={natural} currency={account.currency} title={`Raw signed balance: ${balance}`} />
           </p>
+          <p className="text-xs text-slate-500">Shown in this account&apos;s natural direction; raw signed balance on hover.</p>
         </div>
         <form action={verifyAccountBalanceAction}>
           <input type="hidden" name="code" value={account.code} />

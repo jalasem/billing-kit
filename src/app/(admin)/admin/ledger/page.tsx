@@ -1,5 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { Money, Table, Td, Th } from "@/components/ui";
+import { naturalBalance } from "@/core/ledger";
 import { db } from "@/db/client";
 import { accountBalances, accounts } from "@/db/schema";
 
@@ -26,23 +27,27 @@ export default async function LedgerPage() {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.account.id}>
-              <Td>
-                <code>{row.account.code}</code>
-              </Td>
-              <Td>{row.account.name}</Td>
-              <Td>{row.account.type}</Td>
-              <Td>
-                <Money amount={row.balance ?? 0n} currency={row.account.currency} />
-              </Td>
-              <Td>
-                <a href={`/admin/ledger/accounts/${encodeURIComponent(row.account.code)}`} className="font-medium text-slate-900 underline">
-                  View postings
-                </a>
-              </Td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const raw = row.balance ?? 0n;
+            const natural = naturalBalance(row.account, raw);
+            return (
+              <tr key={row.account.id}>
+                <Td>
+                  <code>{row.account.code}</code>
+                </Td>
+                <Td>{row.account.name}</Td>
+                <Td>{row.account.type}</Td>
+                <Td>
+                  <Money amount={natural} currency={row.account.currency} title={`Raw signed balance: ${raw}`} />
+                </Td>
+                <Td>
+                  <a href={`/admin/ledger/accounts/${encodeURIComponent(row.account.code)}`} className="font-medium text-slate-900 underline">
+                    View postings
+                  </a>
+                </Td>
+              </tr>
+            );
+          })}
           {rows.length === 0 && (
             <tr>
               <Td colSpan={5}>No accounts yet.</Td>
@@ -50,6 +55,7 @@ export default async function LedgerPage() {
           )}
         </tbody>
       </Table>
+      <p className="text-xs text-slate-500">Balances shown in each account&apos;s natural direction; raw signed balance on hover.</p>
     </div>
   );
 }
