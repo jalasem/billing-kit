@@ -58,6 +58,10 @@ export async function changePlan(db: DbOrTx, subscriptionId: string, newPlanId: 
         periodStart: changeAt,
         periodEnd: subscription.currentPeriodEnd,
         dueAt: changeAt,
+        // A customer can already be sitting on credit from an earlier
+        // downgrade; apply it here too rather than making them wait for
+        // the next period's invoice.
+        applyCustomerCredit: true,
         lines: [
           {
             kind: "credit",

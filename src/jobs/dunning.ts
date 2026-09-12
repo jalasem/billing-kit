@@ -1,7 +1,7 @@
 import { runDunningJob, type DunningJobSummary } from "@/core/billing/dunning/run";
 import { ConsoleNotifier, ResendNotifier, type Notifier } from "@/core/notify";
 import type { DbOrTx } from "@/db/client";
-import { createProvider } from "@/providers/registry";
+import { buildLiveProviders } from "@/providers/registry";
 
 /** `resend` when `RESEND_API_KEY` is set, otherwise the `console` default. */
 function defaultNotifier(): Notifier {
@@ -12,11 +12,7 @@ function defaultNotifier(): Notifier {
   return new ResendNotifier({ apiKey, from: process.env.RESEND_FROM ?? "billing@example.com" });
 }
 
-/** Runs the hourly dunning job against every provider. */
+/** Runs the hourly dunning job against every configured provider. */
 export async function runDunning(db: DbOrTx): Promise<DunningJobSummary> {
-  return runDunningJob(
-    db,
-    { stripe: createProvider("stripe"), paystack: createProvider("paystack") },
-    { notifier: defaultNotifier() },
-  );
+  return runDunningJob(db, buildLiveProviders("jobs/dunning"), { notifier: defaultNotifier() });
 }

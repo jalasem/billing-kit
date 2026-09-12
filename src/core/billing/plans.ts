@@ -12,21 +12,30 @@ export interface CreatePlanInput {
   amount: bigint;
   currency: string;
   active?: boolean;
+  /** Pre-existing provider refs (e.g. a plan already created by hand in the Stripe/Paystack dashboard). A ref already present for `provider.id` skips calling `provider.createPlan`. */
+  providerRefs?: PlanProviderRefs;
 }
 
 /**
- * Creates a plan row, creating the provider-side plan/price first when the
- * caller didn't already supply one in `provider_refs` for `provider.id`.
+ * Creates a plan row, creating the provider-side plan/price first —
+ * *unless* the caller already supplied one in `input.providerRefs` for
+ * `provider.id`, in which case that ref is used as-is and no provider call
+ * is made at all.
  */
 export async function createPlan(db: DbOrTx, provider: PaymentProvider, input: CreatePlanInput): Promise<Plan> {
-  const { providerPlanId } = await provider.createPlan({
-    name: input.name,
-    money: { amount: input.amount, currency: input.currency },
-    interval: input.interval,
-    intervalCount: input.intervalCount ?? 1,
-  });
+  const existingRef = input.providerRefs?.[provider.id];
+  const providerPlanId =
+    existingRef ??
+    (
+      await provider.createPlan({
+        name: input.name,
+        money: { amount: input.amount, currency: input.currency },
+        interval: input.interval,
+        intervalCount: input.intervalCount ?? 1,
+      })
+    ).providerPlanId;
 
-  const providerRefs: PlanProviderRefs = { [provider.id]: providerPlanId };
+  const providerRefs: PlanProviderRefs = { ...input.providerRefs, [provider.id]: providerPlanId };
 
   const [plan] = await db
     .insert(plans)
