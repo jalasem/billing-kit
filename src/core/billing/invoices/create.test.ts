@@ -106,4 +106,33 @@ describe("issueInvoiceForPeriod", () => {
     const [updatedCustomer] = await db.select().from(customers).where(eq(customers.id, customer.id));
     expect(updatedCustomer.customerCredits).toBe(500n);
   });
+
+  it("applies a customer's credit exactly once in total when two invoices are created concurrently", async () => {
+    // Locking regression test: without `SELECT ... FOR UPDATE` on the
+    // customer row, two concurrent invoice creations for the same customer
+    // could both read the same pre-decrement credit balance and both apply
+    // it, over-crediting the customer. Two different subscriptions (so the
+    // (subscription_id, period_start) uniqueness doesn't collide) share one
+    // customer with 1000n credit; each wants 800n, more than half of it.
+    const planA = await seedPlan(db, fakeProvider, { name: "A", amount: 800n, currency: "USD" });
+    const planB = await seedPlan(db, fakeProvider, { name: "B", amount: 800n, currency: "USD" });
+    const customer = await seedCustomer(db, { email: "issue-concurrent@example.com" });
+    await db.update(customers).set({ customerCredits: 1000n }).where(eq(customers.id, customer.id));
+
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    const [resultA, resultB] = await Promise.all([
+      createSubscription(db, fakeProvider, { customerId: customer.id, planId: planA.id, startTrial: false, now }),
+      createSubscription(db, fakeProvider, { customerId: customer.id, planId: planB.id, startTrial: false, now }),
+    ]);
+
+    const totalA = resultA.invoice!.total;
+    const totalB = resultB.invoice!.total;
+    // Combined demand (1600) exceeds the available credit (1000), so
+    // exactly 1000 of credit is applied in total, split however the two
+    // transactions happened to serialize — never double-applied to 2000.
+    expect(totalA + totalB).toBe(600n);
+
+    const [updatedCustomer] = await db.select().from(customers).where(eq(customers.id, customer.id));
+    expect(updatedCustomer.customerCredits).toBe(0n);
+  });
 });

@@ -68,7 +68,13 @@ export async function createInvoice(db: DbOrTx, input: CreateInvoiceInput): Prom
 
     let creditApplied = 0n;
     if (input.applyCustomerCredit) {
-      const [customer] = await tx.select().from(customers).where(eq(customers.id, input.customerId));
+      // Locks the customer row for the rest of this transaction: a second
+      // concurrent invoice for the same customer that also wants to apply
+      // credit blocks here until this transaction commits (or rolls back),
+      // then re-reads the now-decremented balance — without the lock, two
+      // concurrent reads could both see the same pre-decrement balance and
+      // both apply it, consuming it twice.
+      const [customer] = await tx.select().from(customers).where(eq(customers.id, input.customerId)).for("update");
       if (customer && customer.customerCredits > 0n && subtotal > 0n) {
         creditApplied = customer.customerCredits < subtotal ? customer.customerCredits : subtotal;
       }
