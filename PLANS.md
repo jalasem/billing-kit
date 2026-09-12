@@ -57,4 +57,4 @@ Design: `docs/superpowers/specs/2026-09-12-billing-kit-design.md`.
 - [x] `pnpm seed` demo data; screenshots in the README (GIF skipped — see `.superpowers/m5-report.md`)
 - [x] Contribution guide, issue templates, semantic versioning, changelog
 - [x] Security notes: webhook secrets, cron secret rotation, PII handling
-- [ ] Launch: publish the ledger article, post the repo, add billing-kit to abdulsamii.com as a case study
+- [x] Launch: v1.0.0 tagged and released; billing-kit case study live on abdulsamii.com (publishing the ledger article stays with the author)
