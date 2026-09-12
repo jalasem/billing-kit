@@ -34,14 +34,14 @@ Design: `docs/superpowers/specs/2026-09-12-billing-kit-design.md`.
 
 ## M3 — Subscriptions, invoices, and dunning (done when: a subscription can be created, renewed, fail payment, recover, and cancel with the ledger and invoices correct at every step)
 
-- [ ] Products and plans (recurring intervals, trial days, currency per plan)
-- [ ] Subscription state machine: `trialing`, `active`, `past_due`, `unpaid`, `cancelled`, `paused`; allowed transitions in code and tests
-- [ ] Invoices and invoice lines; invoice numbering; open → paid → void transitions
-- [ ] Plan change with a documented proration policy (credit note as a ledger entry)
-- [ ] Dunning schedule (day 0, 3, 5, 7), grace period, retries through the provider, notification hooks
-- [ ] `Notifier` interface with console and Resend implementations and three templates
-- [ ] `dunning` cron job, idempotent, protected by a secret
-- [ ] Invariant 6 tests plus end-to-end lifecycle tests with the `fake` provider
+- [x] Products and plans (recurring intervals, trial days, currency per plan)
+- [x] Subscription state machine: `trialing`, `active`, `past_due`, `unpaid`, `cancelled`, `paused`; allowed transitions in code and tests
+- [x] Invoices and invoice lines; invoice numbering; open → paid → void transitions
+- [x] Plan change with a documented proration policy (credit note as a ledger entry)
+- [x] Dunning schedule (day 0, 3, 5, 7), grace period, retries through the provider, notification hooks
+- [x] `Notifier` interface with console and Resend implementations and three templates
+- [x] `dunning` cron job, idempotent, protected by a secret
+- [x] Invariant 6 tests plus end-to-end lifecycle tests with the `fake` provider
 
 ## M4 — Portal and admin (done when: a customer can manage their plan and an operator can trace any kobo from a screen)
 

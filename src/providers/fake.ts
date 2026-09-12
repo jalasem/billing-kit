@@ -17,9 +17,12 @@ export class FakeProvider implements PaymentProvider {
   private readonly webhookSecret: string;
   private customerSeq = 0;
   private checkoutSeq = 0;
+  private planSeq = 0;
   private subscriptionSeq = 0;
   private chargeSeq = 0;
   private readonly subscriptions = new Map<string, { status: string }>();
+  /** Scripted `chargeSavedMethod` outcomes, consumed in order; defaults to "succeeded" once the queue is empty. */
+  private chargeOutcomes: Array<"succeeded" | "failed"> = [];
   private settlements: Array<{
     settlementId: string;
     money: Money;
@@ -47,6 +50,12 @@ export class FakeProvider implements PaymentProvider {
     return { url: `${input.successUrl}?session=${providerRef}`, providerRef };
   }
 
+  async createPlan(input: { name: string }): Promise<{ providerPlanId: string }> {
+    void input;
+    this.planSeq += 1;
+    return { providerPlanId: `plan_fake_${this.planSeq}` };
+  }
+
   async createSubscription(input: {
     reference: string;
   }): Promise<{ providerSubscriptionId: string; status: string }> {
@@ -67,7 +76,17 @@ export class FakeProvider implements PaymentProvider {
   }): Promise<{ providerRef: string; status: "succeeded" | "failed" | "pending" }> {
     void input;
     this.chargeSeq += 1;
-    return { providerRef: `ch_fake_${this.chargeSeq}`, status: "succeeded" };
+    const status = this.chargeOutcomes.shift() ?? "succeeded";
+    return { providerRef: `ch_fake_${this.chargeSeq}`, status };
+  }
+
+  /**
+   * Test-only helper: queues the outcomes `chargeSavedMethod` returns for
+   * its next N calls, in order (e.g. dunning "fails once, then recovers").
+   * Once the queue is drained, calls go back to always succeeding.
+   */
+  scriptChargeOutcomes(outcomes: Array<"succeeded" | "failed">): void {
+    this.chargeOutcomes.push(...outcomes);
   }
 
   verifyWebhookSignature(rawBody: string, headers: Headers): boolean {

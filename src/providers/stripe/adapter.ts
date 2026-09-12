@@ -88,6 +88,21 @@ export class StripeProvider implements PaymentProvider {
     return { url: session.url, providerRef: session.id };
   }
 
+  async createPlan(input: {
+    name: string;
+    money: Money;
+    interval: "month" | "year";
+    intervalCount: number;
+  }): Promise<{ providerPlanId: string }> {
+    const price = await this.client.prices.create({
+      currency: input.money.currency.toLowerCase(),
+      unit_amount: toSafeNumber(input.money.amount),
+      recurring: { interval: input.interval, interval_count: input.intervalCount },
+      product_data: { name: input.name },
+    });
+    return { providerPlanId: price.id };
+  }
+
   async createSubscription(input: {
     providerCustomerId: string;
     plan: { providerPlanId?: string; money: Money; interval: "month" | "year" };

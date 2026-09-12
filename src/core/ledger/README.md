@@ -53,7 +53,7 @@ provider-scoped accounts per supported `ProviderId` (`stripe`, `paystack`,
 | `bank:{CUR}` | asset | Our actual bank account, debited when a settlement lands. |
 | `revenue:{CUR}` | revenue | Earned revenue. |
 | `refunds:{CUR}` | expense | Contra-revenue: money returned to customers, kept as its own account rather than reversing `revenue`. |
-| `receivable:{CUR}` | asset | Amounts owed to us that have not yet been collected (reserved for invoicing in M3). |
+| `receivable:{CUR}` | asset | Amounts owed to us that have not yet been collected (invoicing, from M3). |
 
 ### Webhook ingestion postings
 
@@ -73,6 +73,51 @@ provider-scoped accounts per supported `ProviderId` (`stripe`, `paystack`,
 Every posting above goes through `postEntry` with an idempotency key derived
 from the provider event id or settlement id, so replaying the same webhook
 or reconciliation run is a no-op.
+
+## Invoicing postings (M3)
+
+- **Issuing an invoice** (`draft → open`), entry key `invoice:{id}:issued`:
+  debit `receivable:{CUR}` for the invoice total, credit `revenue:{CUR}`.
+  Credit and proration lines on the invoice are negative amounts, so they
+  reduce the total the entry posts — the entry itself always has exactly
+  these two postings; it is the *total* that already nets out any credits,
+  not a third posting. An invoice whose total is exactly zero (fully
+  covered by applied `customer_credits`) skips this entry entirely and is
+  created already `paid` — there is no cash or revenue movement to record.
+- **Paying an invoice**, entry key `invoice:{id}:paid`: debit
+  `cash:{provider}:{CUR}` for the invoice total, credit `receivable:{CUR}`.
+  A reported fee is posted the same way M2 posts a payment fee (debit
+  `fees:{provider}:{CUR}`, credit `cash:{provider}:{CUR}`).
+- **Voiding an open invoice**, entry key `invoice:{id}:void`: the exact
+  reverse of the issued entry (credit `receivable:{CUR}`, debit
+  `revenue:{CUR}`, both for the invoice total). An **uncollectible**
+  write-off (dunning exhausted past the cancel-after threshold) uses this
+  same reversal — an uncollectible invoice is voided against revenue, not
+  left as a permanent receivable.
+- **M2/M3 resolution — `payment.succeeded` and `payment.failed` against an
+  invoice**: if the event's `provider_ref` matches an invoice's own
+  `provider_ref` (set the moment billing-kit initiates a charge for that
+  invoice, win or lose — see `attemptInvoicePayment`), it is an invoice
+  payment: `payment.succeeded` posts the "paid" entry above (against
+  `receivable`, not `revenue` — revenue was already recognised when the
+  invoice was issued) and marks the invoice paid; `payment.failed` starts
+  dunning instead of posting anything (a failed payment never moved
+  money). An event matching no invoice falls through to the plain one-off
+  `cash`/`revenue` posting from M2, unchanged.
+- **Proration** (plan change mid-period): daily, calendar-day policy —
+  **`period_start` is inclusive, `period_end` is exclusive**. Both the old
+  and new plan's full-period amount is amortised over the same
+  `totalDays` (the current period's length): `amount / totalDays`,
+  floored to the minor unit, with the integer remainder added to the
+  period's *last* day, so a plan's per-day amounts always sum back to
+  exactly its full amount. The credit for the old plan's unused days and
+  the charge for the new plan's remaining days are computed from that same
+  daily split; their difference (`delta`) becomes an `open` invoice
+  (`credit` line for the old plan, `proration` line for the new one) when
+  positive, or is banked as `customer_credits` on the customer when
+  negative, applied automatically the next time an invoice is issued. See
+  `src/core/billing/subscriptions/proration.ts` for the implementation and
+  its test for the worked example.
 
 ## Operational note: the app's database role
 

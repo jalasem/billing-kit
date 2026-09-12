@@ -17,3 +17,15 @@ export async function resetBillingTables(db: DbOrTx): Promise<void> {
       cascade`,
   );
 }
+
+/** Truncates the ledger, M2, and M3 tables (subscriptions, invoices, dunning, notifications). */
+export async function resetM3Tables(db: DbOrTx): Promise<void> {
+  await db.execute(
+    sql`truncate table
+      audit_log, idempotency_keys, account_balances, postings, entries, accounts,
+      reconciliation_flags, webhook_events, settlements, refunds, payments, customers,
+      dunning_attempts, notifications, invoice_lines, invoices, invoice_sequences,
+      subscriptions, plans, products
+      cascade`,
+  );
+}

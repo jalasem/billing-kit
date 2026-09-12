@@ -74,6 +74,18 @@ export interface PaymentProvider {
     metadata?: Record<string, string>;
   }): Promise<{ url: string; providerRef: string }>;
 
+  /**
+   * Creates the provider-side plan/price a subscription will bill against.
+   * Called by `createPlan` (src/core/billing/plans.ts) only when the
+   * caller didn't already supply a `provider_refs` id for this provider.
+   */
+  createPlan(input: {
+    name: string;
+    money: Money;
+    interval: "month" | "year";
+    intervalCount: number;
+  }): Promise<{ providerPlanId: string }>;
+
   createSubscription(input: {
     providerCustomerId: string;
     plan: { providerPlanId?: string; money: Money; interval: "month" | "year" };

@@ -77,6 +77,24 @@ export class PaystackProvider implements PaymentProvider {
     return { url: response.data.authorization_url, providerRef: response.data.reference };
   }
 
+  async createPlan(input: {
+    name: string;
+    money: Money;
+    interval: "month" | "year";
+    intervalCount: number;
+  }): Promise<{ providerPlanId: string }> {
+    // Paystack has no interval_count of its own; a count above 1 (e.g.
+    // quarterly-as-3-months) isn't representable in a single Paystack plan
+    // interval and is out of scope for the fixtures billing-kit ships with.
+    const response = await this.client.post<{ plan_code: string }>("/plan", {
+      name: input.name,
+      amount: toSafeNumber(input.money.amount),
+      currency: input.money.currency.toUpperCase(),
+      interval: input.interval === "month" ? "monthly" : "annually",
+    });
+    return { providerPlanId: response.data.plan_code };
+  }
+
   async createSubscription(input: {
     providerCustomerId: string;
     plan: { providerPlanId?: string; money: Money; interval: "month" | "year" };
