@@ -196,6 +196,31 @@ describe("invariant 3: idempotent posting", () => {
   });
 });
 
+describe("invariant: an entry must have at least two postings", () => {
+  it("rejects an entry with zero postings at commit", async () => {
+    await expectRejectionMessage(
+      db.transaction(async (tx) => {
+        await tx.insert(entries).values({ occurredAt: new Date(), description: "no postings" });
+      }),
+      /at least two postings/i,
+    );
+  });
+
+  it("rejects an entry with a single zero-amount posting at commit", async () => {
+    await expectRejectionMessage(
+      db.transaction(async (tx) => {
+        const [entry] = await tx
+          .insert(entries)
+          .values({ occurredAt: new Date(), description: "single zero-amount posting" })
+          .returning();
+
+        await tx.insert(postings).values({ entryId: entry.id, accountId: cash.id, amount: 0n, currency: "NGN" });
+      }),
+      /at least two postings/i,
+    );
+  });
+});
+
 describe("invariant 5: cached balances match the sum of postings", () => {
   it("matches recomputeBalance for every account after 200 random balanced entries", async () => {
     const codes = ["a1", "a2", "a3", "a4", "a5"];
