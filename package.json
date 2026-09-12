@@ -1,0 +1,48 @@
+{
+  "name": "billing-kit",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "next": "^15.3",
+    "react": "^19.1",
+    "react-dom": "^19.1",
+    "drizzle-orm": "^0.44",
+    "postgres": "^3.4",
+    "zod": "^3.24"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4.1",
+    "@tailwindcss/postcss": "^4.1",
+    "eslint": "^9",
+    "eslint-config-next": "^15.3",
+    "eslint-plugin-react-hooks": "^5.0",
+    "@eslint/eslintrc": "^3",
+    "vitest": "^3",
+    "@playwright/test": "^1.55",
+    "drizzle-kit": "^0.31",
+    "dotenv": "^16"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "unrs-resolver"]
+  }
+}

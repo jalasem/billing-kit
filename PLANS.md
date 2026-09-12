@@ -7,7 +7,7 @@ Design: `docs/superpowers/specs/2026-09-12-billing-kit-design.md`.
 ## M0 — Setup and design (done when: repo public, docs merged, CI runs on push)
 
 - [x] Repository, MIT licence, README, design spec, this roadmap
-- [ ] Next.js 15 + TypeScript strict + Tailwind v4 scaffold with pnpm, ESLint, Vitest, Playwright
+- [x] Next.js 15 + TypeScript strict + Tailwind v4 scaffold with pnpm, ESLint, Vitest, Playwright
 - [ ] Docker Compose Postgres for local development; `.env.example`
 - [ ] GitHub Actions: typecheck, lint, unit tests against a Postgres service container
 
