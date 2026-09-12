@@ -13,13 +13,13 @@ Design: `docs/superpowers/specs/2026-09-12-billing-kit-design.md`.
 
 ## M1 — Foundations and the ledger (done when: invariants 1 to 5 pass in CI)
 
-- [ ] Drizzle schema and migrations: `accounts`, `entries`, `postings`, `account_balances`, `idempotency_keys`, `audit_log`
-- [ ] Zero-sum-per-currency constraint trigger on entries; append-only rules (no UPDATE or DELETE on entries and postings)
-- [ ] `ledger.post(entry)` API: validates, writes postings and balances in one transaction, returns the entry
-- [ ] Idempotent mutation helper: `withIdempotency(key, fn)` storing the response
-- [ ] Money helpers: minor-unit `bigint` arithmetic, currency registry (NGN, USD, GBP, EUR to start), formatting
-- [ ] Vitest suite for invariants 1 to 5 against Postgres
-- [ ] Article tie-in: link "Ledger design for money you can't get wrong" from the ledger module README
+- [x] Drizzle schema and migrations: `accounts`, `entries`, `postings`, `account_balances`, `idempotency_keys`, `audit_log`
+- [x] Zero-sum-per-currency constraint trigger on entries; append-only rules (no UPDATE or DELETE on entries and postings)
+- [x] `ledger.post(entry)` API: validates, writes postings and balances in one transaction, returns the entry
+- [x] Idempotent mutation helper: `withIdempotency(key, fn)` storing the response
+- [x] Money helpers: minor-unit `bigint` arithmetic, currency registry (NGN, USD, GBP, EUR to start), formatting
+- [x] Vitest suite for invariants 1 to 5 against Postgres
+- [x] Article tie-in: link "Ledger design for money you can't get wrong" from the ledger module README
 
 ## M2 — Providers and webhooks (done when: a Stripe and a Paystack test payment each land as ledger entries via webhook, and replaying the webhook changes nothing)
 
