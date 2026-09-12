@@ -1,0 +1,17 @@
+{
+  "event": "refund.processed",
+  "data": {
+    "id": 9911,
+    "domain": "test",
+    "amount": 1000000,
+    "currency": "NGN",
+    "status": "processed",
+    "refunded_at": "2026-01-06T09:00:00.000Z",
+    "expected_at": "2026-01-13T09:00:00.000Z",
+    "customer_note": "Customer changed their mind",
+    "merchant_note": "Approved",
+    "transaction": {
+      "reference": "qTPrJoy9Bx"
+    }
+  }
+}
