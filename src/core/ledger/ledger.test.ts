@@ -221,6 +221,36 @@ describe("invariant: an entry must have at least two postings", () => {
   });
 });
 
+describe("deadlock safety", () => {
+  it("commits two concurrent entries that touch the same two accounts in opposite posting order", async () => {
+    const [a, b] = await Promise.all([
+      postEntry(db, {
+        occurredAt: new Date(),
+        description: "entry A",
+        postings: [
+          { accountCode: "cash", amount: 100n, currency: "NGN" },
+          { accountCode: "revenue", amount: -100n, currency: "NGN" },
+        ],
+      }),
+      postEntry(db, {
+        occurredAt: new Date(),
+        description: "entry B",
+        postings: [
+          { accountCode: "revenue", amount: -50n, currency: "NGN" },
+          { accountCode: "cash", amount: 50n, currency: "NGN" },
+        ],
+      }),
+    ]);
+
+    expect(a.entry.id).not.toBe(b.entry.id);
+
+    expect(await getBalance(db, "cash")).toBe(150n);
+    expect(await getBalance(db, "revenue")).toBe(-150n);
+    expect(await recomputeBalance(db, "cash")).toBe(150n);
+    expect(await recomputeBalance(db, "revenue")).toBe(-150n);
+  });
+});
+
 describe("invariant 5: cached balances match the sum of postings", () => {
   it("matches recomputeBalance for every account after 200 random balanced entries", async () => {
     const codes = ["a1", "a2", "a3", "a4", "a5"];

@@ -1,73 +1,68 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
-import { accountBalances, accounts, auditLog, entries, postings, type Posting } from "@/db/schema";
+import { accountBalances, accounts, auditLog, entries, postings, type Account } from "@/db/schema";
 import { IdempotencyConflictError } from "./errors";
 import { computeRequestHash } from "./request-hash";
 import type { PostEntryInput, PostEntryResult, PostingInput } from "./types";
+
+/** Postgres error codes worth retrying a whole transaction for. */
+const RETRYABLE_SQLSTATES = new Set([
+  "40P01", // deadlock_detected
+  "40001", // serialization_failure
+]);
+const MAX_ATTEMPTS = 3;
 
 export async function postEntry(db: DbOrTx, input: PostEntryInput): Promise<PostEntryResult> {
   assertBalanced(input.postings);
   const requestHash = computeRequestHash(input.description, input.postings);
 
-  return db.transaction(async (tx) => {
-    if (input.idempotencyKey) {
-      const replay = await replayIfAlreadyPosted(tx, input.idempotencyKey, requestHash);
-      if (replay) {
-        return replay;
+  return withRetryOnTransientConflict(() =>
+    db.transaction(async (tx) => {
+      if (input.idempotencyKey) {
+        const replay = await replayIfAlreadyPosted(tx, input.idempotencyKey, requestHash);
+        if (replay) {
+          return replay;
+        }
       }
-    }
 
-    const accountsByCode = await loadAndValidateAccounts(tx, input.postings);
+      const accountsByCode = await loadAndValidateAccounts(tx, input.postings);
 
-    const [entry] = await tx
-      .insert(entries)
-      .values({
-        occurredAt: input.occurredAt,
-        description: input.description,
-        reference: input.reference,
-        idempotencyKey: input.idempotencyKey,
-        requestHash,
-        metadata: input.metadata ?? {},
-      })
-      .returning();
-
-    const insertedPostings: Posting[] = [];
-    for (const posting of input.postings) {
-      const account = accountsByCode.get(posting.accountCode)!;
-      const currency = posting.currency.toUpperCase();
-
-      const [row] = await tx
-        .insert(postings)
+      const [entry] = await tx
+        .insert(entries)
         .values({
-          entryId: entry.id,
-          accountId: account.id,
-          amount: posting.amount,
-          currency,
+          occurredAt: input.occurredAt,
+          description: input.description,
+          reference: input.reference,
+          idempotencyKey: input.idempotencyKey,
+          requestHash,
+          metadata: input.metadata ?? {},
         })
         .returning();
-      insertedPostings.push(row);
 
-      await tx
-        .insert(accountBalances)
-        .values({ accountId: account.id, balance: posting.amount })
-        .onConflictDoUpdate({
-          target: accountBalances.accountId,
-          set: {
-            balance: sql`${accountBalances.balance} + ${posting.amount}`,
-            updatedAt: sql`now()`,
-          },
-        });
-    }
+      const insertedPostings = await tx
+        .insert(postings)
+        .values(
+          input.postings.map((posting) => ({
+            entryId: entry.id,
+            accountId: accountsByCode.get(posting.accountCode)!.id,
+            amount: posting.amount,
+            currency: posting.currency.toUpperCase(),
+          })),
+        )
+        .returning();
 
-    await tx.insert(auditLog).values({
-      actor: "system",
-      action: "ledger.entry.posted",
-      subject: entry.id,
-      details: { description: entry.description, postingCount: insertedPostings.length },
-    });
+      await applyBalanceDeltas(tx, input.postings, accountsByCode);
 
-    return { entry, postings: insertedPostings };
-  });
+      await tx.insert(auditLog).values({
+        actor: "system",
+        action: "ledger.entry.posted",
+        subject: entry.id,
+        details: { description: entry.description, postingCount: insertedPostings.length },
+      });
+
+      return { entry, postings: insertedPostings };
+    }),
+  );
 }
 
 /**
@@ -99,7 +94,10 @@ async function replayIfAlreadyPosted(
   return { entry: existingEntry, postings: existingPostings };
 }
 
-async function loadAndValidateAccounts(tx: DbOrTx, postingsInput: PostingInput[]) {
+async function loadAndValidateAccounts(
+  tx: DbOrTx,
+  postingsInput: PostingInput[],
+): Promise<Map<string, Account>> {
   const codes = [...new Set(postingsInput.map((posting) => posting.accountCode))];
   const accountRows = await tx.select().from(accounts).where(inArray(accounts.code, codes));
   const accountsByCode = new Map(accountRows.map((account) => [account.code, account]));
@@ -119,6 +117,41 @@ async function loadAndValidateAccounts(tx: DbOrTx, postingsInput: PostingInput[]
   return accountsByCode;
 }
 
+/**
+ * Upserts one row per account, in ascending account-id order. Two
+ * transactions that touch the same accounts always take their row locks in
+ * the same order this way, which is what actually prevents a deadlock (the
+ * retry in postEntry is a backstop for the rest: concurrent writers outside
+ * this function, replication conflicts, etc.).
+ */
+async function applyBalanceDeltas(
+  tx: DbOrTx,
+  postingsInput: PostingInput[],
+  accountsByCode: Map<string, Account>,
+): Promise<void> {
+  const deltaByAccountId = new Map<string, bigint>();
+  for (const posting of postingsInput) {
+    const accountId = accountsByCode.get(posting.accountCode)!.id;
+    deltaByAccountId.set(accountId, (deltaByAccountId.get(accountId) ?? 0n) + posting.amount);
+  }
+
+  const orderedAccountIds = [...deltaByAccountId.keys()].sort();
+
+  for (const accountId of orderedAccountIds) {
+    const delta = deltaByAccountId.get(accountId)!;
+    await tx
+      .insert(accountBalances)
+      .values({ accountId, balance: delta })
+      .onConflictDoUpdate({
+        target: accountBalances.accountId,
+        set: {
+          balance: sql`${accountBalances.balance} + ${delta}`,
+          updatedAt: sql`now()`,
+        },
+      });
+  }
+}
+
 function assertBalanced(postingsInput: PostingInput[]): void {
   if (postingsInput.length < 2) {
     throw new Error("An entry needs at least two postings");
@@ -135,4 +168,37 @@ function assertBalanced(postingsInput: PostingInput[]): void {
       throw new Error(`Postings for currency ${currency} do not sum to zero: ${total}`);
     }
   }
+}
+
+async function withRetryOnTransientConflict<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      const isLastAttempt = attempt === MAX_ATTEMPTS;
+      if (isLastAttempt || !isRetryablePgError(error)) {
+        throw error;
+      }
+    }
+  }
+  // Unreachable: the loop always returns or throws.
+  throw new Error("withRetryOnTransientConflict exhausted attempts without an error");
+}
+
+function isRetryablePgError(error: unknown): boolean {
+  const code = pgErrorCode(error);
+  return code !== undefined && RETRYABLE_SQLSTATES.has(code);
+}
+
+function pgErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+  if ("code" in error && typeof (error as { code?: unknown }).code === "string") {
+    return (error as { code: string }).code;
+  }
+  if ("cause" in error) {
+    return pgErrorCode((error as { cause?: unknown }).cause);
+  }
+  return undefined;
 }
