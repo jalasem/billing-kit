@@ -8,7 +8,7 @@ Design: `docs/superpowers/specs/2026-09-12-billing-kit-design.md`.
 
 - [x] Repository, MIT licence, README, design spec, this roadmap
 - [x] Next.js 15 + TypeScript strict + Tailwind v4 scaffold with pnpm, ESLint, Vitest, Playwright
-- [ ] Docker Compose Postgres for local development; `.env.example`
+- [x] Docker Compose Postgres for local development; `.env.example`
 - [ ] GitHub Actions: typecheck, lint, unit tests against a Postgres service container
 
 ## M1 — Foundations and the ledger (done when: invariants 1 to 5 pass in CI)
