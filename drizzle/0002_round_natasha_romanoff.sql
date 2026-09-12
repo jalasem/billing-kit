@@ -1,0 +1,1 @@
+CREATE INDEX "postings_entry_id_idx" ON "postings" USING btree ("entry_id");

@@ -17,7 +17,10 @@ export const postings = pgTable(
     currency: char("currency", { length: 3 }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("postings_account_id_created_at_idx").on(table.accountId, table.createdAt)],
+  (table) => [
+    index("postings_account_id_created_at_idx").on(table.accountId, table.createdAt),
+    index("postings_entry_id_idx").on(table.entryId),
+  ],
 );
 
 export type Posting = typeof postings.$inferSelect;
