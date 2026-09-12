@@ -11,3 +11,6 @@ if (!connectionString) {
 const client = postgres(connectionString);
 
 export const db = drizzle(client, { schema });
+
+/** Either the top-level database handle or a transaction created from it. */
+export type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
