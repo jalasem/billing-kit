@@ -1,6 +1,6 @@
 {
   "name": "billing-kit",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "packageManager": "pnpm@10.11.0",
   "engines": {
@@ -16,7 +16,9 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:reset": "tsx scripts/db-reset.ts",
+    "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.44",
@@ -40,6 +42,7 @@
     "eslint-config-next": "^15.3",
     "eslint-plugin-react-hooks": "^5.0",
     "tailwindcss": "^4.1",
+    "tsx": "^4.23",
     "typescript": "^5.7",
     "vitest": "^3"
   },
